@@ -1,0 +1,41 @@
+# ROMs
+roms/
+*.gb
+*.gbc
+
+# Build artifacts
+build/
+cmake-build-*/
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+
+# Generated code (recompiler output)
+src/generated/banks/
+src/generated/red/
+src/generated/blue/
+src/generated/yellow/
+src/generated/dispatch.c
+src/generated/dispatch.h
+
+# IDE
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+.idea/
+*.swp
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Misc
+-p
