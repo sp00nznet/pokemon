@@ -34,6 +34,7 @@ int codegen_emit_all(codegen_ctx_t *ctx);
 /* Emit a single SM83 instruction as C code to a file */
 void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
                               uint16_t addr, uint8_t imm8, uint16_t imm16,
-                              int indent, int bank);
+                              int indent, int bank,
+                              const uint16_t *valid_labels, int num_valid_labels);
 
 #endif /* CODEGEN_H */

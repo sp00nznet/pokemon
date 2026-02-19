@@ -203,7 +203,7 @@ static bool detect_ld_a_imm(const uint8_t *bank_data, uint16_t pos,
                              uint8_t *bank_num)
 {
     /* Pattern: 0x3E nn  (LD A, n) */
-    for (int lookback = 2; lookback <= 6 && lookback <= (int)pos; lookback++) {
+    for (int lookback = 2; lookback <= 10 && lookback <= (int)pos; lookback++) {
         uint16_t check = pos - lookback;
         if (bank_data[check] == 0x3E) {
             *bank_num = bank_data[check + 1];
@@ -480,10 +480,12 @@ static void trace_from(analysis_ctx_t *ctx, int bank, uint16_t start,
 
                 if (detect_ld_a_imm(ctx->rom_data + bank_file_offset,
                                     pc_local, &switch_bank)) {
-                    /* Heuristic: if target is in bank 0 and switch_bank is
-                     * a valid bank number, this could be a bankswitch call. */
-                    if (target < 0x4000 && switch_bank > 0 &&
-                        switch_bank < ctx->num_banks) {
+                    /* Heuristic: if LD A,n precedes a CALL and switch_bank
+                     * is a valid bank number, this could be a bankswitch call.
+                     * Applies both for calls to Bankswitch stub (target < 0x4000)
+                     * and for direct calls to switched area (target >= 0x4000
+                     * from bank 0 after LD ($2000), A). */
+                    if (switch_bank > 0 && switch_bank < ctx->num_banks) {
                         is_bankswitch = true;
                     }
                 }
@@ -517,9 +519,21 @@ static void trace_from(analysis_ctx_t *ctx, int bank, uint16_t start,
                     if (ctx->banks[0].function_count < MAX_FUNCTIONS_PER_BANK)
                         add_function(&ctx->banks[0], target, 0, false);
                 } else if (target >= 0x4000 && target < 0x8000) {
-                    /* Same bank call target (or cross-bank if switched) */
-                    if (ba->function_count < MAX_FUNCTIONS_PER_BANK)
-                        add_function(ba, target, (uint8_t)bank, false);
+                    if (bank == 0) {
+                        /* Bank 0 CALL to switchable area: the target bank
+                         * depends on what was written to MBC register.
+                         * Try to detect the bank from preceding LD A,n. */
+                        uint8_t call_bank = 0xFF; /* default: wildcard */
+                        if (is_bankswitch && switch_bank > 0 &&
+                            switch_bank < ctx->num_banks) {
+                            call_bank = switch_bank;
+                        }
+                        record_xbank_call(ctx, target, call_bank);
+                    } else {
+                        /* Same bank call target */
+                        if (ba->function_count < MAX_FUNCTIONS_PER_BANK)
+                            add_function(ba, target, (uint8_t)bank, false);
+                    }
                 }
 
                 /* Flow continues after the CALL */
@@ -694,9 +708,10 @@ static void propagate_function_ids(bank_analysis_t *ba)
         basic_block_t *entry = find_block_starting_at(ba, f->entry_addr);
         if (!entry) continue;
 
-        /* Claim the entry block for this function */
-        if (entry->function_id < 0)
-            entry->function_id = fi;
+        /* Claim the entry block for this function - ALWAYS claim it,
+         * even if a previous function's fall-through already claimed it.
+         * A function's entry block definitionally belongs to it. */
+        entry->function_id = fi;
 
         /* Update first_block_idx */
         if (f->first_block_idx < 0)
@@ -733,6 +748,15 @@ static void propagate_function_ids(bank_analysis_t *ba)
                 /* Only claim blocks that don't already belong to a function */
                 if (succ->function_id >= 0)
                     continue;
+
+                /* Don't claim blocks that are entry points of OTHER functions.
+                 * This prevents fall-through from function A absorbing
+                 * function B's entry block, which would leave B empty. */
+                {
+                    function_info_t *succ_func = find_function(ba, succ_addr);
+                    if (succ_func && succ_func != f)
+                        continue;
+                }
 
                 succ->function_id = fi;
                 if (tail < MAX_BLOCKS_PER_BANK)
@@ -831,6 +855,36 @@ static void split_cross_function_jp_targets(bank_analysis_t *ba)
                 }
 
                 changed = true;
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Ensure all branch targets have block starts                        */
+/* ------------------------------------------------------------------ */
+
+/* After all tracing, some branch successor addresses may fall in the
+ * middle of existing blocks (due to worklist ordering). This pass
+ * ensures every successor address has a block starting at it. */
+static void ensure_successor_blocks(bank_analysis_t *ba)
+{
+    int orig_count = ba->block_count;
+    for (int i = 0; i < orig_count; i++) {
+        basic_block_t *blk = &ba->blocks[i];
+        if (blk->is_data) continue;
+
+        for (int s = 0; s < blk->num_successors; s++) {
+            if (blk->successor_bank[s] != ba->bank) continue;
+            uint16_t target = blk->successor_addr[s];
+
+            /* Already have a block starting here? */
+            if (find_block_starting_at(ba, target)) continue;
+
+            /* Check if target falls inside an existing block */
+            basic_block_t *container = find_block_containing(ba, target);
+            if (container) {
+                split_block_at(ba, container, target);
             }
         }
     }
@@ -982,6 +1036,10 @@ void analysis_run_bank(analysis_ctx_t *ctx, int bank)
      * This ensures the codegen always has a valid function to tail-call. */
     split_cross_function_jp_targets(ba);
 
+    /* Ensure all branch successor addresses have block starts.
+     * Worklist ordering can leave some JR/JP targets unsplit. */
+    ensure_successor_blocks(ba);
+
     /* Final bookkeeping: update first_block_idx and count blocks. */
     for (int fi = 0; fi < ba->function_count; fi++) {
         function_info_t *f = &ba->functions[fi];
@@ -1008,6 +1066,101 @@ void analysis_run(analysis_ctx_t *ctx)
     /* Pass 1: Analyse bank 0 first to discover cross-bank calls */
     printf("Analyzing bank 0...\n");
     analysis_run_bank(ctx, 0);
+
+    /* Pass 1.5: Seed function entry points from PredefPointers table.
+     * The table is in bank 0x13 at an address encoded in GetPredefPointer.
+     * GetPredefPointer (0x7E49): saves regs, then at 0x7E5B: LD HL, $7E79
+     * (the PredefPointers table base). Each entry is 3 bytes: [bank, lo, hi].
+     * Pokemon Red has 99 predefs (IDs 0-98). */
+    if (ctx->num_banks > 0x13) {
+        size_t gpp_rom_off = (size_t)0x13 * BANK_SIZE + (0x7E5B - 0x4000);
+        if (gpp_rom_off + 3 <= ctx->rom_size && ctx->rom_data[gpp_rom_off] == 0x21) {
+            /* Read PredefPointers table address from LD HL, imm16 at 0x7E5B */
+            uint16_t table_addr = ctx->rom_data[gpp_rom_off + 1] |
+                                  ((uint16_t)ctx->rom_data[gpp_rom_off + 2] << 8);
+            int predef_count = 0;
+            for (int id = 0; id < 99; id++) {
+                uint16_t entry_rom_addr = table_addr + (uint16_t)(id * 3);
+                /* Convert table entry address to ROM offset (in bank 0x13) */
+                size_t entry_off = (size_t)0x13 * BANK_SIZE + (entry_rom_addr - 0x4000);
+                if (entry_off + 3 > ctx->rom_size) break;
+                uint8_t tgt_bank = ctx->rom_data[entry_off];
+                uint8_t tgt_lo   = ctx->rom_data[entry_off + 1];
+                uint8_t tgt_hi   = ctx->rom_data[entry_off + 2];
+                uint16_t tgt_addr = (uint16_t)((tgt_hi << 8) | tgt_lo);
+                /* Add as function entry point in the target bank */
+                int eff_bank = (tgt_addr < 0x4000) ? 0 : tgt_bank;
+                if (eff_bank < ctx->num_banks) {
+                    bank_analysis_t *tgt_ba = &ctx->banks[eff_bank];
+                    if (tgt_ba->function_count < MAX_FUNCTIONS_PER_BANK) {
+                        if (!find_function(tgt_ba, tgt_addr)) {
+                            add_function(tgt_ba, tgt_addr, (uint8_t)eff_bank, false);
+                            predef_count++;
+                        }
+                    }
+                }
+            }
+            printf("Seeded %d predef function entry points from table at 0x%04X.\n",
+                   predef_count, table_addr);
+        }
+    }
+
+    /* Pass 1.6: Seed function entry points from Bankswitch (farcall) patterns.
+     * Scan all ROM for CALL 0x35D6 (Bankswitch) and extract target bank/addr
+     * from the preceding LD B, imm8 + LD HL, imm16 instructions.
+     * Pattern A: 06 BB 21 LL HH CD D6 35  (LD B,bank; LD HL,addr; CALL)
+     * Pattern B: 21 LL HH 06 BB CD D6 35  (LD HL,addr; LD B,bank; CALL) */
+    {
+        int farcall_count = 0;
+        for (size_t off = 0; off + 7 < ctx->rom_size; off++) {
+            /* Look for CD D6 35 = CALL 0x35D6 */
+            if (ctx->rom_data[off] != 0xCD) continue;
+            if (ctx->rom_data[off+1] != 0xD6 || ctx->rom_data[off+2] != 0x35)
+                continue;
+            uint8_t target_bank = 0;
+            uint16_t target_addr = 0;
+            bool found = false;
+            /* Pattern A: 06 BB 21 LL HH CD D6 35 (at off-5) */
+            if (off >= 5 &&
+                ctx->rom_data[off-5] == 0x06 &&
+                ctx->rom_data[off-3] == 0x21) {
+                target_bank = ctx->rom_data[off-4];
+                target_addr = ctx->rom_data[off-2] |
+                              ((uint16_t)ctx->rom_data[off-1] << 8);
+                found = true;
+            }
+            /* Pattern B: 21 LL HH 06 BB CD D6 35 (at off-5) */
+            else if (off >= 5 &&
+                     ctx->rom_data[off-5] == 0x21 &&
+                     ctx->rom_data[off-2] == 0x06) {
+                target_addr = ctx->rom_data[off-4] |
+                              ((uint16_t)ctx->rom_data[off-3] << 8);
+                target_bank = ctx->rom_data[off-1];
+                found = true;
+            }
+            if (found && target_addr >= 0x0150 && target_addr < 0x8000) {
+                int eff_bank = (target_addr < 0x4000) ? 0 : target_bank;
+                if (eff_bank < ctx->num_banks) {
+                    bank_analysis_t *tgt_ba = &ctx->banks[eff_bank];
+                    if (tgt_ba->function_count < MAX_FUNCTIONS_PER_BANK &&
+                        !find_function(tgt_ba, target_addr)) {
+                        add_function(tgt_ba, target_addr, (uint8_t)eff_bank, false);
+                        farcall_count++;
+                    }
+                }
+            }
+        }
+        printf("Seeded %d farcall target entry points.\n", farcall_count);
+    }
+
+    /* Seed 0x4000 as entry point for all banks.
+     * Many GB games have a function at the start of each bank. */
+    for (int b = 1; b < ctx->num_banks; b++) {
+        bank_analysis_t *ba = &ctx->banks[b];
+        if (!find_function(ba, 0x4000) && ba->function_count < MAX_FUNCTIONS_PER_BANK) {
+            add_function(ba, 0x4000, (uint8_t)b, false);
+        }
+    }
 
     /* Pass 2: Analyse all other banks */
     for (int b = 1; b < ctx->num_banks; b++) {
@@ -1036,6 +1189,7 @@ void analysis_run(analysis_ctx_t *ctx)
      * since pass 3 may have added new traces. */
     propagate_function_ids(b0);
     split_cross_function_jp_targets(b0);
+    ensure_successor_blocks(b0);
     for (int fi = 0; fi < b0->function_count; fi++) {
         function_info_t *f = &b0->functions[fi];
         if (f->first_block_idx < 0) {

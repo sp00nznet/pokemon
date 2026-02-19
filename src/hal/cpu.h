@@ -30,6 +30,7 @@ struct gb_state {
     /* Cycle counter */
     uint64_t cycles;
     uint64_t target_cycles; /* For synchronization */
+    uint64_t sync_cycles;   /* Cycles at last hal_sync call */
 
     /* Memory subsystem (defined in memory.h) */
     struct memory_state *mem;
@@ -48,6 +49,10 @@ struct gb_state {
 
     /* Running flag */
     bool running;
+
+    /* Frame callback - called when PPU has a frame ready */
+    void (*frame_callback)(struct gb_state *gb, void *userdata);
+    void *frame_userdata;
 
     /* Debug */
     bool debug_cpu;

@@ -4,6 +4,9 @@
 #include "ppu.h"
 #include <stdio.h>
 
+/* Dispatch into generated interrupt handler code */
+extern void dispatch_call(gb_state_t *gb, uint8_t bank, uint16_t addr);
+
 void cpu_init(gb_state_t *gb) {
     /* Post-boot ROM register values (DMG) */
     gb->a = 0x01;
@@ -19,6 +22,7 @@ void cpu_init(gb_state_t *gb) {
     gb->halted = 0;
     gb->cycles = 0;
     gb->target_cycles = 0;
+    gb->sync_cycles = 0;
     gb->running = true;
 
     gb->debug_cpu = false;
@@ -48,10 +52,17 @@ void cpu_check_interrupts(gb_state_t *gb) {
             /* Clear the interrupt flag */
             gb->mem->io[0x0F] &= ~(1 << bit);
 
-            /* Push PC and jump to handler */
-            cpu_push16(gb, gb->pc);
-            gb->pc = 0x0040 + (bit * 8);
+            /* In the static recompiler, we dispatch to the interrupt handler
+             * as a C function call instead of setting PC. The handler's RET
+             * maps to a C return, bringing us back here. */
+            uint16_t isr_addr = 0x0040 + (uint16_t)(bit * 8);
             gb->cycles += 20;
+
+            dispatch_call(gb, 0, isr_addr);
+
+            /* Re-enable interrupts after ISR returns (ISR typically ends
+             * with RETI which sets IME=1, but in case the generated code
+             * for RETI doesn't set it, ensure it's restored) */
             return;
         }
     }
@@ -64,6 +75,7 @@ void cpu_halt(gb_state_t *gb) {
     while (gb->halted && gb->running) {
         /* Advance 4 cycles at a time */
         gb->cycles += 4;
+        gb->sync_cycles = gb->cycles;
         hal_sync(gb, 4);
 
         /* Check if any interrupt can wake us */
@@ -73,6 +85,11 @@ void cpu_halt(gb_state_t *gb) {
             gb->halted = 0;
         }
     }
+
+    /* Dispatch the pending interrupt BEFORE returning to generated code.
+     * This ensures the ISR runs (e.g., sets hVBlankOccurred) before the
+     * code after HALT checks for it. */
+    cpu_check_interrupts(gb);
 }
 
 void hal_halt(gb_state_t *gb) {
@@ -99,5 +116,17 @@ void hal_sync(gb_state_t *gb, uint32_t cycles) {
     /* Update PPU */
     if (gb->ppu) {
         ppu_tick(gb->ppu, gb, cycles);
+
+        /* When a frame is ready, call the frame callback for rendering + events */
+        if (gb->ppu->frame_ready && gb->frame_callback) {
+            gb->frame_callback(gb, gb->frame_userdata);
+            gb->ppu->frame_ready = false;
+        }
+    }
+
+    /* Check and dispatch pending interrupts.
+     * Skip if we're inside a HALT loop (HALT handles its own dispatch). */
+    if (!gb->halted) {
+        cpu_check_interrupts(gb);
     }
 }

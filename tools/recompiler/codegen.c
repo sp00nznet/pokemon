@@ -222,9 +222,19 @@ static const char *indent_str(int indent) {
  * codegen_emit_instruction - translate one SM83 instruction to C
  * -------------------------------------------------------------------------- */
 
+/* Check if a target address has a label in the current function's block set */
+static bool has_label(const uint16_t *valid_labels, int num_valid_labels, uint16_t target) {
+    if (!valid_labels) return true; /* No label set = assume all valid */
+    for (int i = 0; i < num_valid_labels; i++) {
+        if (valid_labels[i] == target) return true;
+    }
+    return false;
+}
+
 void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
                               uint16_t addr, uint8_t imm8, uint16_t imm16,
-                              int indent, int bank) {
+                              int indent, int bank,
+                              const uint16_t *valid_labels, int num_valid_labels) {
     const char *ws = indent_str(indent);
     char disasm[64];
     char buf1[128], buf2[128];
@@ -885,12 +895,22 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             fprintf(f, "%sreturn;\n", ws);
         } else if (inst->branch == BRANCH_JUMP) {
             /* Unconditional JP a16 */
-            fprintf(f, "%sgoto label_%04X;\n", ws, imm16);
+            if (has_label(valid_labels, num_valid_labels, imm16)) {
+                fprintf(f, "%sgoto label_%04X;\n", ws, imm16);
+            } else {
+                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); return; /* JP to unincluded block */\n", ws, bank, imm16);
+            }
         } else if (inst->branch == BRANCH_JUMP_COND) {
             /* Conditional JP cc, a16 */
-            fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
-                    ws, cond_expr(inst->op1),
-                    inst->cycles_taken - inst->cycles, imm16);
+            if (has_label(valid_labels, num_valid_labels, imm16)) {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, imm16);
+            } else {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); return; }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, bank, imm16);
+            }
         }
         break;
     }
@@ -901,28 +921,65 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         uint16_t target = (uint16_t)(addr + 2 + offset);
         if (inst->branch == BRANCH_JUMP) {
             /* Unconditional JR r8 */
-            fprintf(f, "%sgoto label_%04X;\n", ws, target);
+            if (has_label(valid_labels, num_valid_labels, target)) {
+                fprintf(f, "%sgoto label_%04X;\n", ws, target);
+            } else {
+                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); return; /* JR to unincluded block */\n", ws, bank, target);
+            }
         } else if (inst->branch == BRANCH_JUMP_COND) {
             /* Conditional JR cc, r8 */
-            fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
-                    ws, cond_expr(inst->op1),
-                    inst->cycles_taken - inst->cycles, target);
+            if (has_label(valid_labels, num_valid_labels, target)) {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, target);
+            } else {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); return; }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, bank, target);
+            }
         }
         break;
     }
 
     /* ----- CALL ----- */
     case OP_CALL: {
+        /* Targets >= 0x8000 are not ROM space (VRAM/SRAM/WRAM/IO).
+         * These occur when data is misinterpreted as code. Emit a
+         * runtime dispatch that will log and return gracefully. */
+        if (imm16 >= 0x8000) {
+            if (inst->branch == BRANCH_CALL) {
+                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); /* non-ROM CALL */\n", ws, bank, imm16);
+            } else if (inst->branch == BRANCH_CALL_COND) {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); } /* non-ROM CALL */\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, bank, imm16);
+            }
+            break;
+        }
+        /* For bank 0 calling into switchable area (0x4000-0x7FFF),
+         * the target bank depends on what's currently mapped at runtime.
+         * Use dispatch_call for runtime bank resolution. */
+        bool call_runtime_bank = (imm16 >= 0x4000 && imm16 < 0x8000 && bank == 0);
         int target_bank = (imm16 < 0x4000) ? 0 : bank;
         func_name(fname, sizeof(fname), target_bank, imm16);
         if (inst->branch == BRANCH_CALL) {
             /* Unconditional CALL a16 */
-            fprintf(f, "%s%s(gb);\n", ws, fname);
+            if (call_runtime_bank) {
+                fprintf(f, "%sdispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X);\n", ws, imm16);
+            } else {
+                fprintf(f, "%s%s(gb);\n", ws, fname);
+            }
         } else if (inst->branch == BRANCH_CALL_COND) {
             /* Conditional CALL cc, a16 */
-            fprintf(f, "%sif (%s) { gb->cycles += %d; %s(gb); }\n",
-                    ws, cond_expr(inst->op1),
-                    inst->cycles_taken - inst->cycles, fname);
+            if (call_runtime_bank) {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, imm16);
+            } else {
+                fprintf(f, "%sif (%s) { gb->cycles += %d; %s(gb); }\n",
+                        ws, cond_expr(inst->op1),
+                        inst->cycles_taken - inst->cycles, fname);
+            }
         }
         break;
     }
@@ -1009,14 +1066,36 @@ static void emit_data_region(FILE *f, const codegen_ctx_t *ctx,
     fprintf(f, "\n};\n");
 }
 
+/* Bank 0 functions that are provided by hand-written stubs in stubs.c.
+ * These use the PUSH return_addr + JP (HL) pattern to simulate a CALL,
+ * which doesn't work in a static recompiler (the cleanup code at the
+ * return address never executes). The stubs handle this correctly. */
+static const uint16_t stub_func_addrs_bank0[] = {
+    0x35D6,  /* Bankswitch (farcall) */
+    0x3E6D,  /* Predef */
+    0x3D97,  /* CallFunctionInTable */
+    0       /* sentinel */
+};
+
+static bool is_stub_function(int bank, uint16_t entry_addr) {
+    if (bank != 0) return false;
+    for (int i = 0; stub_func_addrs_bank0[i] != 0; i++) {
+        if (entry_addr == stub_func_addrs_bank0[i])
+            return true;
+    }
+    return false;
+}
+
 /* Check if an address is within one of the included blocks */
 static bool addr_in_included_blocks(const bank_analysis_t *ba,
                                      const bool *block_included,
                                      uint16_t addr) {
+    /* Check if an included block STARTS at this address.
+     * Labels are only emitted at block start addresses, so a goto
+     * is only valid if we have a block starting at the target. */
     for (int b = 0; b < ba->block_count; b++) {
         if (block_included[b] &&
-            addr >= ba->blocks[b].start_addr &&
-            addr < ba->blocks[b].end_addr) {
+            ba->blocks[b].start_addr == addr) {
             return true;
         }
     }
@@ -1081,6 +1160,21 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                 if (!block_included[b] &&
                     ba->blocks[b].start_addr == succ_addr &&
                     !ba->blocks[b].is_data) {
+                    /* Don't pull in blocks belonging to stub functions.
+                     * These will be called as functions instead of inlined. */
+                    int blk_fid = ba->blocks[b].function_id;
+                    if (blk_fid >= 0 && blk_fid < ba->function_count &&
+                        is_stub_function(bank,
+                            ba->functions[blk_fid].entry_addr)) {
+                        break; /* Skip - handled by stub */
+                    }
+                    /* Don't pull in blocks that are entry points of OTHER
+                     * functions.  These should be called as functions. */
+                    if (blk_fid >= 0 && blk_fid != func_idx &&
+                        ba->blocks[b].start_addr ==
+                            ba->functions[blk_fid].entry_addr) {
+                        break; /* Skip - will emit function call */
+                    }
                     block_indices[block_count++] = b;
                     block_included[b] = true;
                     break;
@@ -1101,6 +1195,31 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
         block_indices[j + 1] = key;
     }
 
+    /* CRITICAL: Ensure the entry point block is always first.
+     * JP-reachable blocks from other functions may have lower addresses
+     * than the entry point. If the entry block isn't first, the generated
+     * C function will execute the wrong code when called. */
+    for (int i = 1; i < block_count; i++) {
+        if (ba->blocks[block_indices[i]].start_addr == func->entry_addr) {
+            int entry_idx = block_indices[i];
+            /* Shift everything down to make room at position 0 */
+            for (int j = i; j > 0; j--) {
+                block_indices[j] = block_indices[j - 1];
+            }
+            block_indices[0] = entry_idx;
+            break;
+        }
+    }
+
+    /* Build valid labels array for goto target validation */
+    uint16_t valid_labels[MAX_BLOCKS_PER_BANK];
+    int num_valid_labels = 0;
+    for (int bi = 0; bi < block_count; bi++) {
+        if (!ba->blocks[block_indices[bi]].is_data) {
+            valid_labels[num_valid_labels++] = ba->blocks[block_indices[bi]].start_addr;
+        }
+    }
+
     /* Emit each block */
     for (int bi = 0; bi < block_count; bi++) {
         const basic_block_t *blk = &ba->blocks[block_indices[bi]];
@@ -1114,6 +1233,12 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
 
         /* Emit label for this block */
         fprintf(f, "label_%04X:\n", blk->start_addr);
+
+        /* Sync hardware (PPU, timer) at basic block boundaries */
+        fprintf(f, "    { uint32_t _sc = (uint32_t)(gb->cycles - gb->sync_cycles);"
+                   " if (_sc > 0) { hal_sync(gb, _sc); gb->sync_cycles = gb->cycles; } }\n");
+        /* Yield if stop requested (from event processing) */
+        fprintf(f, "    if (!gb->running) return;\n");
 
         /* Decode and emit each instruction in this block */
         uint16_t pc = blk->start_addr;
@@ -1203,11 +1328,100 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                 }
             }
 
+            /* Check for CALL instructions to non-existent functions.
+             * If the target function doesn't exist in the analysis, emit
+             * dispatch_call instead of a direct function call that would
+             * cause an unresolved symbol error. */
+            if (!patched && inst.mnemonic == OP_CALL &&
+                inst_imm16 < 0x8000) {
+                int call_tgt_bank = (inst_imm16 < 0x4000) ? 0 : bank;
+                bool call_runtime = (inst_imm16 >= 0x4000 && inst_imm16 < 0x8000 && bank == 0);
+                if (!call_runtime) {
+                    const bank_analysis_t *call_ba = &ctx->analysis->banks[call_tgt_bank];
+                    bool call_exists = false;
+                    for (int fi2 = 0; fi2 < call_ba->function_count; fi2++) {
+                        if (call_ba->functions[fi2].entry_addr == inst_imm16) {
+                            call_exists = true;
+                            break;
+                        }
+                    }
+                    if (!call_exists) {
+                        char disasm[64];
+                        sm83_format(disasm, sizeof(disasm), &inst, pc, inst_imm8, inst_imm16);
+                        fprintf(f, "    /* %04X: %s */\n", pc, disasm);
+                        fprintf(f, "    gb->cycles += %d;\n", inst.cycles);
+                        if (inst.branch == BRANCH_CALL) {
+                            fprintf(f, "    dispatch_call(gb, %d, 0x%04X); /* undiscovered func */\n",
+                                    call_tgt_bank, inst_imm16);
+                        } else {
+                            fprintf(f, "    if (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); } /* undiscovered func */\n",
+                                    cond_expr(inst.op1), inst.cycles_taken - inst.cycles,
+                                    call_tgt_bank, inst_imm16);
+                        }
+                        patched = true;
+                    }
+                }
+            }
+
             if (!patched) {
-                codegen_emit_instruction(f, &inst, pc, inst_imm8, inst_imm16, 4, bank);
+                codegen_emit_instruction(f, &inst, pc, inst_imm8, inst_imm16, 4, bank,
+                                        valid_labels, num_valid_labels);
             }
 
             pc += inst.length;
+        }
+
+        /* After emitting this block, ensure C-level fallthrough goes to
+         * the correct ROM address.  Pulled-in blocks from other functions
+         * may have lower addresses and get sorted between this block and
+         * its intended fallthrough target, breaking C fallthrough. */
+        if (blk->has_fallthrough) {
+            uint16_t ft_addr = blk->end_addr;
+            bool next_is_ft = false;
+            bool ft_in_func = false;
+
+            /* Check if the NEXT emitted block IS the fallthrough target */
+            if (bi + 1 < block_count) {
+                uint16_t next_addr = ba->blocks[block_indices[bi + 1]].start_addr;
+                if (next_addr == ft_addr)
+                    next_is_ft = true;
+            }
+
+            if (!next_is_ft) {
+                /* The next emitted block is NOT the fallthrough target.
+                 * Check if the target exists anywhere in our block list. */
+                for (int bi2 = 0; bi2 < block_count; bi2++) {
+                    if (ba->blocks[block_indices[bi2]].start_addr == ft_addr) {
+                        ft_in_func = true;
+                        break;
+                    }
+                }
+
+                if (ft_in_func) {
+                    /* Target is in our function but not the next block.
+                     * Emit a goto to skip over the intervening blocks. */
+                    fprintf(f, "    goto label_%04X; /* explicit fallthrough */\n", ft_addr);
+                } else {
+                    /* Fallthrough to a block NOT in our function.
+                     * Look for a function at the fallthrough address. */
+                    int ft_bank = (ft_addr < 0x4000) ? 0 : bank;
+                    bool has_ft_func = false;
+                    const bank_analysis_t *ft_ba = &ctx->analysis->banks[ft_bank];
+                    for (int fi2 = 0; fi2 < ft_ba->function_count; fi2++) {
+                        if (ft_ba->functions[fi2].entry_addr == ft_addr) {
+                            has_ft_func = true;
+                            break;
+                        }
+                    }
+                    if (has_ft_func) {
+                        char tname[64];
+                        func_name(tname, sizeof(tname), ft_bank, ft_addr);
+                        fprintf(f, "    %s(gb); return; /* fallthrough to next function */\n", tname);
+                    } else if (ft_addr >= 0x4000 && ft_addr < 0x8000 && bank == 0) {
+                        fprintf(f, "    dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); return; /* fallthrough */\n", ft_addr);
+                    }
+                }
+            }
         }
     }
 
@@ -1317,8 +1531,13 @@ int codegen_emit_bank(codegen_ctx_t *ctx, int bank) {
         }
     }
 
-    /* Emit all functions */
+    /* Emit all functions (skip stub functions provided by stubs.c) */
     for (int fi = 0; fi < ba->function_count; fi++) {
+        if (is_stub_function(bank, ba->functions[fi].entry_addr)) {
+            fprintf(f, "\n/* func_b%02X_%04X: provided by stubs.c */\n",
+                    bank, ba->functions[fi].entry_addr);
+            continue;
+        }
         emit_function(f, ctx, bank, fi);
     }
 
@@ -1418,18 +1637,29 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
 
     fprintf(cf, "    default: break;\n");
     fprintf(cf, "    }\n");
+    fprintf(cf, "    /* HRAM functions (code copied to HRAM at runtime, e.g. DMA routine) */\n");
+    fprintf(cf, "    if (addr >= 0xFF80 && addr <= 0xFFFE) {\n");
+    fprintf(cf, "        switch (addr) {\n");
+    fprintf(cf, "        case 0xFF80: func_b00_FF80(gb); return;\n");
+    fprintf(cf, "        default: break;\n");
+    fprintf(cf, "        }\n");
+    fprintf(cf, "    }\n");
     fprintf(cf, "    fprintf(stderr, \"dispatch_call: unknown target bank=%%02X addr=%%04X\\n\", bank, addr);\n");
     fprintf(cf, "}\n\n");
 
     /* Generate dispatch_jump - for JP (HL) and similar indirect jumps.
-     * We search across all banks for a matching function entry point,
-     * preferring bank 0 for addresses in the 0x0000-0x3FFF range. */
+     * For addresses in bank 0 range (0x0000-0x3FFF), use bank 0 directly.
+     * For switchable bank range (0x4000-0x7FFF), use the current ROM bank. */
     fprintf(cf, "void dispatch_jump(gb_state_t *gb, uint16_t addr) {\n");
-    fprintf(cf, "    /* Try to find a function at this address in the current bank context */\n");
+    fprintf(cf, "    /* For switchable bank area, dispatch using current ROM bank */\n");
+    fprintf(cf, "    if (addr >= 0x4000 && addr < 0x8000) {\n");
+    fprintf(cf, "        dispatch_call(gb, (uint8_t)gb->mem->rom_bank, addr);\n");
+    fprintf(cf, "        return;\n");
+    fprintf(cf, "    }\n");
+    fprintf(cf, "    /* Bank 0 addresses */\n");
     fprintf(cf, "    switch (addr) {\n");
 
-    /* Emit cases for all unique function addresses across all banks.
-     * Bank 0 functions are always accessible (ROM bank 0 is always mapped). */
+    /* Emit cases for bank 0 function addresses */
     {
         const bank_analysis_t *ba0 = &ctx->analysis->banks[0];
         for (int fi = 0; fi < ba0->function_count; fi++) {
@@ -1442,7 +1672,7 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
 
     fprintf(cf, "    default: break;\n");
     fprintf(cf, "    }\n");
-    fprintf(cf, "    fprintf(stderr, \"dispatch_jump: unknown target addr=%%04X\\n\", addr);\n");
+    fprintf(cf, "    fprintf(stderr, \"dispatch_jump: unknown target addr=%%04X bank=%%02X\\n\", addr, gb->mem->rom_bank);\n");
     fprintf(cf, "}\n\n");
 
     /* dispatch_init / dispatch_run */
@@ -1450,9 +1680,11 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
     fprintf(cf, "    (void)gb;\n");
     fprintf(cf, "}\n\n");
     fprintf(cf, "void dispatch_run(gb_state_t *gb) {\n");
-    fprintf(cf, "    while (gb->running && gb->cycles < gb->target_cycles) {\n");
-    fprintf(cf, "        func_b00_0150(gb);\n");
-    fprintf(cf, "    }\n");
+    fprintf(cf, "    /* Run the entry point - it loops internally via gotos.\n");
+    fprintf(cf, "     * Frame rendering and event processing happen in the\n");
+    fprintf(cf, "     * frame_callback, triggered from hal_sync when PPU\n");
+    fprintf(cf, "     * produces a frame. Exits when gb->running becomes false. */\n");
+    fprintf(cf, "    func_b00_0150(gb);\n");
     fprintf(cf, "}\n");
 
     fclose(cf);

@@ -2,6 +2,7 @@
 #include "cpu.h"
 #include "memory.h"
 #include <string.h>
+#include <stdio.h>
 
 /* --------------------------------------------------------------------------
  * DMG green palette (RGBA, 0xAARRGGBB stored as 0xAABBGGRR depending on
@@ -154,76 +155,86 @@ void ppu_tick(ppu_state_t *ppu, gb_state_t *gb, uint32_t cycles) {
 
     ppu->mode_cycles += cycles;
 
-    switch (ppu->mode) {
-        case PPU_MODE_OAM: /* Mode 2: OAM Search */
-            if (ppu->mode_cycles >= CYCLES_OAM_SEARCH) {
-                ppu->mode_cycles -= CYCLES_OAM_SEARCH;
-                ppu->mode = PPU_MODE_TRANSFER;
-            }
-            break;
+    /* Process all mode transitions that fit within accumulated cycles */
+    bool progress = true;
+    while (progress) {
+        progress = false;
 
-        case PPU_MODE_TRANSFER: /* Mode 3: Pixel Transfer */
-            if (ppu->mode_cycles >= CYCLES_PIXEL_XFER) {
-                ppu->mode_cycles -= CYCLES_PIXEL_XFER;
-
-                /* Render the scanline at the end of mode 3 */
-                if (ppu->ly < SCREEN_HEIGHT) {
-                    ppu_render_scanline(ppu, gb);
+        switch (ppu->mode) {
+            case PPU_MODE_OAM: /* Mode 2: OAM Search */
+                if (ppu->mode_cycles >= CYCLES_OAM_SEARCH) {
+                    ppu->mode_cycles -= CYCLES_OAM_SEARCH;
+                    ppu->mode = PPU_MODE_TRANSFER;
+                    progress = true;
                 }
+                break;
 
-                /* Transition to HBlank (mode 0) */
-                ppu->mode = PPU_MODE_HBLANK;
-                check_stat_interrupts(ppu, gb);
-            }
-            break;
+            case PPU_MODE_TRANSFER: /* Mode 3: Pixel Transfer */
+                if (ppu->mode_cycles >= CYCLES_PIXEL_XFER) {
+                    ppu->mode_cycles -= CYCLES_PIXEL_XFER;
 
-        case PPU_MODE_HBLANK: /* Mode 0: HBlank */
-            if (ppu->mode_cycles >= CYCLES_HBLANK) {
-                ppu->mode_cycles -= CYCLES_HBLANK;
-                ppu->ly++;
-
-                if (ppu->ly == SCREEN_HEIGHT) {
-                    /* Enter VBlank (mode 1) */
-                    ppu->mode = PPU_MODE_VBLANK;
-                    ppu->frame_ready = true;
-                    request_vblank_interrupt(gb);
-                    check_stat_interrupts(ppu, gb);
-                } else {
-                    /* Next visible scanline: back to OAM search */
-                    ppu->mode = PPU_MODE_OAM;
-                    check_stat_interrupts(ppu, gb);
-                }
-
-                /* Check LYC coincidence */
-                if (ppu->ly == ppu->lyc) {
-                    if (ppu->stat & STAT_LYC_INT) {
-                        request_stat_interrupt(gb);
+                    /* Render the scanline at the end of mode 3 */
+                    if (ppu->ly < SCREEN_HEIGHT) {
+                        ppu_render_scanline(ppu, gb);
                     }
-                }
-            }
-            break;
 
-        case PPU_MODE_VBLANK: /* Mode 1: VBlank (lines 144-153) */
-            if (ppu->mode_cycles >= CYCLES_PER_LINE) {
-                ppu->mode_cycles -= CYCLES_PER_LINE;
-                ppu->ly++;
-
-                if (ppu->ly >= LINES_PER_FRAME) {
-                    /* Frame complete, reset to line 0 */
-                    ppu->ly = 0;
-                    ppu->window_line = 0;
-                    ppu->mode = PPU_MODE_OAM;
+                    /* Transition to HBlank (mode 0) */
+                    ppu->mode = PPU_MODE_HBLANK;
                     check_stat_interrupts(ppu, gb);
+                    progress = true;
                 }
+                break;
 
-                /* Check LYC coincidence */
-                if (ppu->ly == ppu->lyc) {
-                    if (ppu->stat & STAT_LYC_INT) {
-                        request_stat_interrupt(gb);
+            case PPU_MODE_HBLANK: /* Mode 0: HBlank */
+                if (ppu->mode_cycles >= CYCLES_HBLANK) {
+                    ppu->mode_cycles -= CYCLES_HBLANK;
+                    ppu->ly++;
+
+                    if (ppu->ly == SCREEN_HEIGHT) {
+                        /* Enter VBlank (mode 1) */
+                        ppu->mode = PPU_MODE_VBLANK;
+                        ppu->frame_ready = true;
+                        request_vblank_interrupt(gb);
+                        check_stat_interrupts(ppu, gb);
+                    } else {
+                        /* Next visible scanline: back to OAM search */
+                        ppu->mode = PPU_MODE_OAM;
+                        check_stat_interrupts(ppu, gb);
                     }
+
+                    /* Check LYC coincidence */
+                    if (ppu->ly == ppu->lyc) {
+                        if (ppu->stat & STAT_LYC_INT) {
+                            request_stat_interrupt(gb);
+                        }
+                    }
+                    progress = true;
                 }
-            }
-            break;
+                break;
+
+            case PPU_MODE_VBLANK: /* Mode 1: VBlank (lines 144-153) */
+                if (ppu->mode_cycles >= CYCLES_PER_LINE) {
+                    ppu->mode_cycles -= CYCLES_PER_LINE;
+                    ppu->ly++;
+
+                    if (ppu->ly >= LINES_PER_FRAME) {
+                        /* Frame complete, reset to line 0 */
+                        ppu->ly = 0;
+                        ppu->window_line = 0;
+                        ppu->mode = PPU_MODE_OAM;
+                        check_stat_interrupts(ppu, gb);
+                    }
+
+                    /* Check LYC coincidence */
+                    if (ppu->ly == ppu->lyc) {
+                        if (ppu->stat & STAT_LYC_INT) {
+                            request_stat_interrupt(gb);
+                        }
+                    }
+                    progress = true;
+                }
+                break;
+        }
     }
 }
 
@@ -499,6 +510,42 @@ void ppu_write_lcdc(ppu_state_t *ppu, gb_state_t *gb, uint8_t val) {
         ppu->mode_cycles = 0;
         ppu->window_line = 0;
         check_stat_interrupts(ppu, gb);
+        /* Debug: dump map state when LCD turns on */
+        {
+            static int lcd_on_count = 0;
+            lcd_on_count++;
+            if (lcd_on_count <= 5) {
+                uint16_t bg_map = (val & 0x08) ? 0x9C00 : 0x9800;
+                fprintf(stderr, "LCD ON #%d: LCDC=%02X BGmap@%04X\n", lcd_on_count, val, bg_map);
+                /* Count non-zero tiles in active BG map visible area */
+                int content = 0;
+                for (int r = 0; r < 18; r++)
+                    for (int c = 0; c < 20; c++) {
+                        uint8_t t = gb->mem->vram[(bg_map - 0x8000) + r * 32 + c];
+                        if (t != 0x00) content++;
+                    }
+                fprintf(stderr, "  BG map non-zero visible: %d/360\n", content);
+                /* Show first 6 rows that have content */
+                for (int r = 0; r < 18; r++) {
+                    int rc = 0;
+                    for (int c = 0; c < 20; c++) {
+                        uint8_t t = gb->mem->vram[(bg_map - 0x8000) + r * 32 + c];
+                        if (t != 0x00) rc++;
+                    }
+                    if (rc > 0) {
+                        fprintf(stderr, "  row%02d: ", r);
+                        for (int c = 0; c < 20; c++)
+                            fprintf(stderr, "%02X ", gb->mem->vram[(bg_map - 0x8000) + r * 32 + c]);
+                        fprintf(stderr, "\n");
+                    }
+                }
+                /* VRAM data check */
+                int vlo = 0, vhi = 0;
+                for (int i = 0; i < 0x1000; i++) if (gb->mem->vram[i]) vlo++;
+                for (int i = 0x1000; i < 0x1800; i++) if (gb->mem->vram[i]) vhi++;
+                fprintf(stderr, "  VRAM data: lo=%d hi=%d\n", vlo, vhi);
+            }
+        }
     }
 }
 

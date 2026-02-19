@@ -132,6 +132,9 @@ static void io_write(gb_state_t *gb, uint8_t reg, uint8_t val) {
         return;
 
     case 0x40: /* LCDC */
+        if (val != gb->mem->io[0x40]) {
+            fprintf(stderr, "LCDC write: %02X -> %02X\n", gb->mem->io[0x40], val);
+        }
         if (gb->ppu) ppu_write_lcdc(gb->ppu, gb, val);
         gb->mem->io[0x40] = val;
         return;
@@ -139,6 +142,16 @@ static void io_write(gb_state_t *gb, uint8_t reg, uint8_t val) {
     case 0x41: /* STAT */
         if (gb->ppu) ppu_write_stat(gb->ppu, val);
         gb->mem->io[0x41] = (val & 0x78) | (gb->mem->io[0x41] & 0x07);
+        return;
+
+    case 0x42: /* SCY */
+        if (gb->ppu) gb->ppu->scy = val;
+        gb->mem->io[0x42] = val;
+        return;
+
+    case 0x43: /* SCX */
+        if (gb->ppu) gb->ppu->scx = val;
+        gb->mem->io[0x43] = val;
         return;
 
     case 0x44: /* LY - read only */
@@ -167,6 +180,16 @@ static void io_write(gb_state_t *gb, uint8_t reg, uint8_t val) {
     case 0x49: /* OBP1 */
         if (gb->ppu) ppu_write_obp(gb->ppu, 1, val);
         gb->mem->io[0x49] = val;
+        return;
+
+    case 0x4A: /* WY */
+        if (gb->ppu) gb->ppu->wy = val;
+        gb->mem->io[0x4A] = val;
+        return;
+
+    case 0x4B: /* WX */
+        if (gb->ppu) gb->ppu->wx = val;
+        gb->mem->io[0x4B] = val;
         return;
 
     /* Audio registers */
@@ -341,8 +364,33 @@ void mem_write8(gb_state_t *gb, uint16_t addr, uint8_t val) {
         uint16_t vram_addr = addr - MEM_VRAM_START;
         if (mem->vram_bank == 1)
             mem->vram2[vram_addr] = val;
-        else
+        else {
+            /* Track writes to tile maps with epoch-based summaries */
+            if (addr >= 0x9C00 && addr <= 0x9FFF) {
+                static int map_write_count = 0;
+                static int map_content_writes = 0;
+                static int map_zero_writes = 0;
+                static int last_report = 0;
+                map_write_count++;
+                if (val != 0x00 && val != 0x7F) {
+                    map_content_writes++;
+                    if (map_content_writes <= 80) {
+                        int offset = addr - 0x9C00;
+                        fprintf(stderr, "MAP9C00[%d,%d]=%02X (write#%d)\n",
+                                offset % 32, offset / 32, val, map_write_count);
+                    }
+                } else if (val == 0x00) {
+                    map_zero_writes++;
+                }
+                /* Report every 500 writes */
+                if (map_write_count - last_report >= 500) {
+                    fprintf(stderr, "MAP9C00 summary: %d total, %d content, %d zeros\n",
+                            map_write_count, map_content_writes, map_zero_writes);
+                    last_report = map_write_count;
+                }
+            }
             mem->vram[vram_addr] = val;
+        }
         return;
     }
     if (addr <= MEM_EXTRAM_END) {
@@ -387,6 +435,9 @@ void mem_write8(gb_state_t *gb, uint16_t addr, uint8_t val) {
         return;
     }
     if (addr == MEM_IE_REG) {
+        if (val != mem->ie_reg) {
+            fprintf(stderr, "IE write: %02X -> %02X\n", mem->ie_reg, val);
+        }
         mem->ie_reg = val;
         return;
     }
