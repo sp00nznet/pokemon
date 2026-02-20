@@ -1456,20 +1456,14 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
             }
 
             /* NLR Step 5: After a CALL to a function containing a POP NLR,
-             * check the flag and return if set (non-local return propagation) */
+             * check the flag and return if set (non-local return propagation).
+             * Safe for conditional CALLs too: flag is only set if call was taken. */
             if (inst.mnemonic == OP_CALL && inst_imm16 < 0x8000) {
                 int call_bank = (inst_imm16 < 0x4000) ? 0 : bank;
                 const nonlocal_return_t *nlr = find_nlr_signal(call_bank, inst_imm16);
                 if (nlr) {
-                    if (inst.branch == BRANCH_CALL) {
-                        /* Unconditional CALL */
-                        fprintf(f, "    if (%s) return; /* NLR: propagate non-local return */\n",
-                                nlr->flag_name);
-                    } else {
-                        /* Conditional CALL - flag can only be set if call was taken */
-                        fprintf(f, "    if (%s) return; /* NLR: propagate non-local return */\n",
-                                nlr->flag_name);
-                    }
+                    fprintf(f, "    if (%s) return; /* NLR: propagate non-local return */\n",
+                            nlr->flag_name);
                 }
             }
 

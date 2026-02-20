@@ -2,6 +2,7 @@
 #include "interrupts.h"
 #include "timer.h"
 #include "ppu.h"
+#include "apu.h"
 #include <stdio.h>
 
 /* Dispatch into generated interrupt handler code */
@@ -122,6 +123,11 @@ void hal_sync(gb_state_t *gb, uint32_t cycles) {
             gb->frame_callback(gb, gb->frame_userdata);
             gb->ppu->frame_ready = false;
         }
+    }
+
+    /* Update APU */
+    if (gb->apu) {
+        apu_tick(gb->apu, gb, cycles);
     }
 
     /* Check and dispatch pending interrupts.

@@ -12,16 +12,18 @@ static void audio_callback(void *userdata, Uint8 *stream, int len) {
     float *out = (float *)stream;
     int samples = len / sizeof(float) / 2; /* Stereo */
 
+    /* Zero-fill first to handle underruns and mute cleanly */
+    memset(stream, 0, len);
+
     if (!g_gb || !g_gb->apu || g_audio->muted) {
-        memset(stream, 0, len);
         return;
     }
 
-    apu_get_samples(g_gb->apu, out, samples);
+    int got = apu_get_samples(g_gb->apu, out, samples);
 
     /* Apply master volume */
     float vol = g_audio->volume;
-    for (int i = 0; i < samples * 2; i++) {
+    for (int i = 0; i < got * 2; i++) {
         out[i] *= vol;
     }
 }

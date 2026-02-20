@@ -268,37 +268,49 @@ static uint8_t get_ch4_output(const apu_state_t *apu)
     return (~apu->ch4.lfsr & 1) ? apu->ch4.volume : 0;
 }
 
+/* Convert a channel's digital output (0-15) to a DAC-centered float.
+ * Returns 0.0f when the channel is disconnected (DAC off / disabled),
+ * and a value in [-1.0, +1.0] when the DAC is active. */
+static float dac_convert(bool enabled, bool dac_on, uint8_t digital)
+{
+    if (!enabled || !dac_on) return 0.0f;
+    return ((float)digital / 7.5f) - 1.0f;
+}
+
 static float mix_sample(apu_state_t *apu, bool right)
 {
     float sum = 0.0f;
     uint8_t panning = apu->nr51;
 
-    uint8_t ch1_out = get_ch1_output(apu);
-    uint8_t ch2_out = get_ch2_output(apu);
-    uint8_t ch3_out = get_ch3_output(apu);
-    uint8_t ch4_out = get_ch4_output(apu);
+    /* Get DAC-centered outputs: [-1,+1] when active, 0 when off */
+    float ch1 = dac_convert(apu->ch1.enabled, apu->ch1.dac_enabled,
+                            duty_table[apu->ch1.duty][apu->ch1.duty_pos] ? apu->ch1.volume : 0);
+    float ch2 = dac_convert(apu->ch2.enabled, apu->ch2.dac_enabled,
+                            duty_table[apu->ch2.duty][apu->ch2.duty_pos] ? apu->ch2.volume : 0);
+    float ch3 = dac_convert(apu->ch3.enabled, apu->ch3.dac_enabled,
+                            get_ch3_output(apu));
+    float ch4 = dac_convert(apu->ch4.enabled, apu->ch4.dac_enabled,
+                            (~apu->ch4.lfsr & 1) ? apu->ch4.volume : 0);
 
     if (right) {
         /* Right channel: bits 0-3 of NR51 */
-        if (panning & 0x01) sum += (float)ch1_out;
-        if (panning & 0x02) sum += (float)ch2_out;
-        if (panning & 0x04) sum += (float)ch3_out;
-        if (panning & 0x08) sum += (float)ch4_out;
+        if (panning & 0x01) sum += ch1;
+        if (panning & 0x02) sum += ch2;
+        if (panning & 0x04) sum += ch3;
+        if (panning & 0x08) sum += ch4;
     } else {
         /* Left channel: bits 4-7 of NR51 */
-        if (panning & 0x10) sum += (float)ch1_out;
-        if (panning & 0x20) sum += (float)ch2_out;
-        if (panning & 0x40) sum += (float)ch3_out;
-        if (panning & 0x80) sum += (float)ch4_out;
+        if (panning & 0x10) sum += ch1;
+        if (panning & 0x20) sum += ch2;
+        if (panning & 0x40) sum += ch3;
+        if (panning & 0x80) sum += ch4;
     }
 
-    /* Apply master volume (0-7 from NR50) */
+    /* Apply master volume (1-8 from NR50) and normalise.
+     * Each channel is in [-1,+1]; 4 channels * volume 8 = 32 max.
+     * Divide by 32 to keep result in [-1,+1]. */
     uint8_t master_vol = right ? (apu->nr50 & 0x07) : ((apu->nr50 >> 4) & 0x07);
-    sum *= (float)(master_vol + 1);
-
-    /* Normalise: max per channel is 15, 4 channels, volume scale 8
-       => max = 15 * 4 * 8 = 480.  Map to [-1, 1]. */
-    sum = (sum / 480.0f) * 2.0f - 1.0f;
+    sum *= (float)(master_vol + 1) / 32.0f;
 
     return sum;
 }
