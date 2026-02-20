@@ -1086,6 +1086,69 @@ static bool is_stub_function(int bank, uint16_t entry_addr) {
     return false;
 }
 
+/* --------------------------------------------------------------------------
+ * Non-local return (NLR) table
+ *
+ * Some GB routines use a POP trick to discard a return address and perform
+ * a longjmp-style escape from nested call frames.  In static recompilation
+ * CALL is a plain C function call (nothing is pushed to the GB stack), so
+ * the POP would consume unrelated data and the non-local return is lost.
+ *
+ * Each entry describes one such pattern:
+ *   pop_addr     - address of the POP that discards the return address
+ *   signal_func  - entry address of the function that contains the POP
+ *                  (callers of this function get an "if (flag) return;"
+ *                   check inserted after each CALL to it)
+ *   target_func  - entry address of the function that should clear the
+ *                  flag on entry (the escape destination)
+ *   flag_name    - name of the file-scope flag variable
+ * -------------------------------------------------------------------------- */
+
+typedef struct {
+    uint8_t  bank;           /* ROM bank */
+    uint16_t pop_addr;       /* Address of POP instruction to skip */
+    uint16_t signal_func;    /* Function containing the POP */
+    uint16_t target_func;    /* Function that clears the flag on entry */
+    const char *flag_name;   /* File-scope flag variable name */
+} nonlocal_return_t;
+
+static const nonlocal_return_t nonlocal_returns[] = {
+    /* Sprite decompressor: POP HL at 0x2630 in func_b00_25D8
+     * escapes back past func_b00_2563's nested decompression loops */
+    { 0, 0x2630, 0x25D8, 0x2563, "_nlr_decomp_bp_done" },
+    { 0, 0, 0, 0, NULL }  /* sentinel */
+};
+
+/* Is the POP at (bank, addr) a non-local return site? */
+static const nonlocal_return_t *find_nlr_pop(int bank, uint16_t addr) {
+    for (int i = 0; nonlocal_returns[i].flag_name; i++) {
+        if (nonlocal_returns[i].bank == bank &&
+            nonlocal_returns[i].pop_addr == addr)
+            return &nonlocal_returns[i];
+    }
+    return NULL;
+}
+
+/* Does a CALL to (bank, target) invoke a function containing a POP NLR? */
+static const nonlocal_return_t *find_nlr_signal(int bank, uint16_t target) {
+    for (int i = 0; nonlocal_returns[i].flag_name; i++) {
+        if (nonlocal_returns[i].bank == bank &&
+            nonlocal_returns[i].signal_func == target)
+            return &nonlocal_returns[i];
+    }
+    return NULL;
+}
+
+/* Should this function clear an NLR flag on entry? */
+static const nonlocal_return_t *find_nlr_target(int bank, uint16_t func_entry) {
+    for (int i = 0; nonlocal_returns[i].flag_name; i++) {
+        if (nonlocal_returns[i].bank == bank &&
+            nonlocal_returns[i].target_func == func_entry)
+            return &nonlocal_returns[i];
+    }
+    return NULL;
+}
+
 /* Check if an address is within one of the included blocks */
 static bool addr_in_included_blocks(const bank_analysis_t *ba,
                                      const bool *block_included,
@@ -1117,6 +1180,15 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
     char fname[64];
     func_name(fname, sizeof(fname), bank, func->entry_addr);
     fprintf(f, "void %s(gb_state_t *gb) {\n", fname);
+
+    /* If this function is an NLR escape destination, clear the flag */
+    {
+        const nonlocal_return_t *nlr = find_nlr_target(bank, func->entry_addr);
+        if (nlr) {
+            fprintf(f, "    %s = 0; /* NLR: clear non-local return flag */\n",
+                    nlr->flag_name);
+        }
+    }
 
     /* Collect all blocks belonging to this function by function_id */
     int block_indices[MAX_BLOCKS_PER_BANK];
@@ -1467,6 +1539,14 @@ int codegen_emit_bank(codegen_ctx_t *ctx, int bank) {
         char fname[64];
         func_name(fname, sizeof(fname), bank, ba->functions[fi].entry_addr);
         fprintf(f, "void %s(gb_state_t *gb);\n", fname);
+    }
+    fprintf(f, "\n");
+
+    /* Emit file-scope NLR flag variables for this bank */
+    for (int i = 0; nonlocal_returns[i].flag_name; i++) {
+        if (nonlocal_returns[i].bank == bank) {
+            fprintf(f, "static int %s = 0;\n", nonlocal_returns[i].flag_name);
+        }
     }
     fprintf(f, "\n");
 
