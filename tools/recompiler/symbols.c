@@ -164,5 +164,7 @@ int sym_get_entry_points(sym_entry_point_t *entries, int max_entries) {
     if (n < max_entries) entries[n++] = (sym_entry_point_t){0x0028, 0, "RST_28"};
     if (n < max_entries) entries[n++] = (sym_entry_point_t){0x0030, 0, "RST_30"};
     if (n < max_entries) entries[n++] = (sym_entry_point_t){0x0038, 0, "RST_38"};
+    /* Additional known bank 0 functions missed by recursive descent */
+    if (n < max_entries) entries[n++] = (sym_entry_point_t){0x1F49, 0, "SoftReset"};
     return n;
 }
