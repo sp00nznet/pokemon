@@ -510,42 +510,6 @@ void ppu_write_lcdc(ppu_state_t *ppu, gb_state_t *gb, uint8_t val) {
         ppu->mode_cycles = 0;
         ppu->window_line = 0;
         check_stat_interrupts(ppu, gb);
-        /* Debug: dump map state when LCD turns on */
-        {
-            static int lcd_on_count = 0;
-            lcd_on_count++;
-            if (lcd_on_count <= 5) {
-                uint16_t bg_map = (val & 0x08) ? 0x9C00 : 0x9800;
-                fprintf(stderr, "LCD ON #%d: LCDC=%02X BGmap@%04X\n", lcd_on_count, val, bg_map);
-                /* Count non-zero tiles in active BG map visible area */
-                int content = 0;
-                for (int r = 0; r < 18; r++)
-                    for (int c = 0; c < 20; c++) {
-                        uint8_t t = gb->mem->vram[(bg_map - 0x8000) + r * 32 + c];
-                        if (t != 0x00) content++;
-                    }
-                fprintf(stderr, "  BG map non-zero visible: %d/360\n", content);
-                /* Show first 6 rows that have content */
-                for (int r = 0; r < 18; r++) {
-                    int rc = 0;
-                    for (int c = 0; c < 20; c++) {
-                        uint8_t t = gb->mem->vram[(bg_map - 0x8000) + r * 32 + c];
-                        if (t != 0x00) rc++;
-                    }
-                    if (rc > 0) {
-                        fprintf(stderr, "  row%02d: ", r);
-                        for (int c = 0; c < 20; c++)
-                            fprintf(stderr, "%02X ", gb->mem->vram[(bg_map - 0x8000) + r * 32 + c]);
-                        fprintf(stderr, "\n");
-                    }
-                }
-                /* VRAM data check */
-                int vlo = 0, vhi = 0;
-                for (int i = 0; i < 0x1000; i++) if (gb->mem->vram[i]) vlo++;
-                for (int i = 0x1000; i < 0x1800; i++) if (gb->mem->vram[i]) vhi++;
-                fprintf(stderr, "  VRAM data: lo=%d hi=%d\n", vlo, vhi);
-            }
-        }
     }
 }
 

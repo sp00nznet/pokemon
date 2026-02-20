@@ -58,11 +58,6 @@ typedef struct {
     game_config_t *config;
     int frame_count;
     Uint32 last_frame_ticks;
-    /* Tracking for change-detection diagnostics */
-    uint8_t prev_lcdc;
-    uint8_t prev_bgp;
-    int prev_vram_lo;
-    int prev_vram_hi;
 } frame_ctx_t;
 
 static uint8_t *load_rom(const char *path, size_t *size_out) {
@@ -132,78 +127,6 @@ static void dump_framebuffer_bmp(const uint32_t fb[SCREEN_HEIGHT][SCREEN_WIDTH],
 static void on_frame(gb_state_t *gb, void *userdata) {
     frame_ctx_t *ctx = (frame_ctx_t *)userdata;
     ctx->frame_count++;
-
-    /* Change-detection diagnostics for first 600 frames */
-    if (ctx->frame_count <= 600) {
-        int vram_lo = 0, vram_hi = 0;
-        for (int i = 0; i < 0x1000; i++) {
-            if (gb->mem->vram[i] != 0) vram_lo++;
-        }
-        for (int i = 0x1000; i < 0x1800; i++) {
-            if (gb->mem->vram[i] != 0) vram_hi++;
-        }
-        uint8_t lcdc = gb->ppu->lcdc;
-        uint8_t bgp = gb->ppu->bgp;
-
-        /* Print on change or at key frames */
-        bool changed = (lcdc != ctx->prev_lcdc || bgp != ctx->prev_bgp ||
-                       vram_lo != ctx->prev_vram_lo || vram_hi != ctx->prev_vram_hi);
-        bool key_frame = (ctx->frame_count <= 5 || ctx->frame_count % 60 == 0);
-
-        if (changed || key_frame) {
-            uint16_t map_base = (lcdc & 0x08) ? 0x9C00 : 0x9800;
-            fprintf(stderr, "Frame %d:%s LCDC=%02X SCX=%d SCY=%d BGP=%02X VRAM[lo=%d hi=%d] map@%04X IE=%02X SP=%04X\n",
-                    ctx->frame_count, changed ? " [CHANGED]" : "",
-                    lcdc, gb->ppu->scx, gb->ppu->scy, bgp,
-                    vram_lo, vram_hi, map_base, gb->mem->ie_reg, gb->sp);
-        }
-
-        ctx->prev_lcdc = lcdc;
-        ctx->prev_bgp = bgp;
-        ctx->prev_vram_lo = vram_lo;
-        ctx->prev_vram_hi = vram_hi;
-
-        /* At key transition frames, print a compact framebuffer summary:
-         * For every 8th row, count non-lightest pixels across the row */
-        if (changed && vram_lo + vram_hi > 0) {
-            /* Dump BOTH tile maps - full 18 rows */
-            for (int map_idx = 0; map_idx < 2; map_idx++) {
-                uint16_t mb = map_idx ? 0x9C00 : 0x9800;
-                int content = 0;
-                for (int r = 0; r < 18; r++)
-                    for (int c = 0; c < 20; c++) {
-                        uint8_t t = gb->mem->vram[(mb - 0x8000) + r * 32 + c];
-                        if (t != 0x00) content++;
-                    }
-                if (content > 0) {
-                    fprintf(stderr, "  Map @%04X (%d non-zero tiles):\n", mb, content);
-                    for (int r = 0; r < 18; r++) {
-                        int row_content = 0;
-                        for (int c = 0; c < 20; c++) {
-                            uint8_t t = gb->mem->vram[(mb - 0x8000) + r * 32 + c];
-                            if (t != 0x00) row_content++;
-                        }
-                        if (row_content > 0) {
-                            fprintf(stderr, "    row%02d: ", r);
-                            for (int c = 0; c < 20; c++) {
-                                uint8_t t = gb->mem->vram[(mb - 0x8000) + r * 32 + c];
-                                fprintf(stderr, "%02X ", t);
-                            }
-                            fprintf(stderr, "\n");
-                        }
-                    }
-                } else {
-                    fprintf(stderr, "  Map @%04X: all zero\n", mb);
-                }
-            }
-        }
-    }
-
-    /* Dump BMP at first VRAM change and at periodic frames */
-    if ((ctx->frame_count <= 300 && (ctx->frame_count % 60 == 0 || ctx->frame_count <= 5)) ||
-        (ctx->frame_count >= 600 && ctx->frame_count <= 1200 && ctx->frame_count % 60 == 0)) {
-        dump_framebuffer_bmp(gb->ppu->framebuffer, ctx->frame_count);
-    }
 
     /* Render the frame */
     window_update(ctx->window, (const uint32_t *)gb->ppu->framebuffer,
