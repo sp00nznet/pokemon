@@ -54,11 +54,47 @@ uint8_t timer_read_div(const timer_state_t *timer) {
     return (uint8_t)(timer->div_counter >> 8);
 }
 
+/* Shared glitch helper: if the selected bit goes from 1→0,
+ * TIMA gets an extra increment (hardware falling-edge glitch). */
+static void timer_check_glitch(timer_state_t *timer, bool old_bit) {
+    bool tac_enabled = (timer->tac & 0x04) != 0;
+    int bit_pos = tac_bit_pos[timer->tac & 0x03];
+    bool new_bit = tac_enabled && ((timer->div_counter >> bit_pos) & 1);
+    if (old_bit && !new_bit) {
+        timer->tima++;
+        if (timer->tima == 0) {
+            timer->tima_overflow = true;
+            timer->overflow_cycles = 4;
+        }
+    }
+}
+
 void timer_write_div(timer_state_t *timer) {
+    /* Detect falling edge before reset (DIV write glitch) */
+    bool tac_enabled = (timer->tac & 0x04) != 0;
+    int bit_pos = tac_bit_pos[timer->tac & 0x03];
+    bool old_bit = tac_enabled && ((timer->div_counter >> bit_pos) & 1);
+
     /* Writing any value resets the entire counter */
     timer->div_counter = 0;
+
+    /* Abort pending TIMA overflow reload (hardware behavior) */
+    if (timer->tima_overflow) {
+        timer->tima_overflow = false;
+    }
+
+    /* If the selected bit was 1 and is now 0, TIMA increments */
+    timer_check_glitch(timer, old_bit);
 }
 
 void timer_write_tac(timer_state_t *timer, uint8_t val) {
+    /* Detect falling edge before TAC change (TAC write glitch) */
+    bool old_enabled = (timer->tac & 0x04) != 0;
+    int old_bit_pos = tac_bit_pos[timer->tac & 0x03];
+    bool old_bit = old_enabled && ((timer->div_counter >> old_bit_pos) & 1);
+
     timer->tac = val & 0x07;
+
+    /* If the selected bit went from 1→0 due to TAC change, TIMA increments */
+    timer_check_glitch(timer, old_bit);
 }
