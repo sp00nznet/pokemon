@@ -513,9 +513,15 @@ void ppu_write_lcdc(ppu_state_t *ppu, gb_state_t *gb, uint8_t val) {
     }
 }
 
-void ppu_write_stat(ppu_state_t *ppu, uint8_t val) {
+void ppu_write_stat(ppu_state_t *ppu, gb_state_t *gb, uint8_t val) {
     /* Only bits 6-3 are writable; bits 2-0 are read-only */
     ppu->stat = (ppu->stat & 0x07) | (val & 0x78);
+    /* Re-evaluate STAT line: changing interrupt enables can cause a rising edge */
+    check_stat_interrupts(ppu, gb);
+}
+
+void ppu_recheck_stat(ppu_state_t *ppu, gb_state_t *gb) {
+    check_stat_interrupts(ppu, gb);
 }
 
 void ppu_write_bgp(ppu_state_t *ppu, uint8_t val) {

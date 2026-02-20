@@ -137,7 +137,7 @@ static void io_write(gb_state_t *gb, uint8_t reg, uint8_t val) {
         return;
 
     case 0x41: /* STAT */
-        if (gb->ppu) ppu_write_stat(gb->ppu, val);
+        if (gb->ppu) ppu_write_stat(gb->ppu, gb, val);
         gb->mem->io[0x41] = (val & 0x78) | (gb->mem->io[0x41] & 0x07);
         return;
 
@@ -155,7 +155,11 @@ static void io_write(gb_state_t *gb, uint8_t reg, uint8_t val) {
         return;
 
     case 0x45: /* LYC */
-        if (gb->ppu) gb->ppu->lyc = val;
+        if (gb->ppu) {
+            gb->ppu->lyc = val;
+            /* Re-evaluate STAT: LYC change can affect coincidence flag */
+            ppu_recheck_stat(gb->ppu, gb);
+        }
         gb->mem->io[0x45] = val;
         return;
 

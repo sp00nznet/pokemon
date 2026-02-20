@@ -116,7 +116,8 @@ uint8_t ppu_read_stat(ppu_state_t *ppu);
 
 /* Register write handlers */
 void ppu_write_lcdc(ppu_state_t *ppu, gb_state_t *gb, uint8_t val);
-void ppu_write_stat(ppu_state_t *ppu, uint8_t val);
+void ppu_write_stat(ppu_state_t *ppu, gb_state_t *gb, uint8_t val);
+void ppu_recheck_stat(ppu_state_t *ppu, gb_state_t *gb);
 void ppu_write_bgp(ppu_state_t *ppu, uint8_t val);
 void ppu_write_obp(ppu_state_t *ppu, int idx, uint8_t val);
 
