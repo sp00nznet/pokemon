@@ -57,8 +57,13 @@ typedef struct {
     key_bindings_t *keys;
     game_config_t *config;
     int frame_count;
-    Uint32 last_frame_ticks;
+    Uint64 last_frame_perf;   /* SDL_GetPerformanceCounter at last frame */
+    Uint64 perf_freq;         /* SDL_GetPerformanceFrequency */
 } frame_ctx_t;
+
+/* Game Boy frame period: 4194304 Hz / (456*154 lines) ≈ 59.7275 fps
+ * Frame period in nanoseconds: 1e9 / 59.7275 ≈ 16742706 ns */
+#define FRAME_PERIOD_NS 16742706ULL
 
 static uint8_t *load_rom(const char *path, size_t *size_out) {
     FILE *f = fopen(path, "rb");
@@ -154,15 +159,26 @@ static void on_frame(gb_state_t *gb, void *userdata) {
         }
     }
 
-    /* Frame timing */
+    /* Frame timing: use high-resolution counter for accurate 59.7275 fps */
     if (!input_fast_forward_active()) {
-        Uint32 now = SDL_GetTicks();
-        Uint32 elapsed = now - ctx->last_frame_ticks;
-        if (elapsed < 16) {
-            SDL_Delay(16 - elapsed);
+        Uint64 now = SDL_GetPerformanceCounter();
+        Uint64 elapsed_ticks = now - ctx->last_frame_perf;
+        /* Convert elapsed ticks to nanoseconds */
+        Uint64 elapsed_ns = (elapsed_ticks * 1000000000ULL) / ctx->perf_freq;
+        if (elapsed_ns < FRAME_PERIOD_NS) {
+            Uint32 wait_ms = (Uint32)((FRAME_PERIOD_NS - elapsed_ns) / 1000000ULL);
+            if (wait_ms > 0)
+                SDL_Delay(wait_ms);
+            /* Spin-wait for remaining sub-millisecond portion */
+            while (1) {
+                now = SDL_GetPerformanceCounter();
+                elapsed_ticks = now - ctx->last_frame_perf;
+                elapsed_ns = (elapsed_ticks * 1000000000ULL) / ctx->perf_freq;
+                if (elapsed_ns >= FRAME_PERIOD_NS) break;
+            }
         }
     }
-    ctx->last_frame_ticks = SDL_GetTicks();
+    ctx->last_frame_perf = SDL_GetPerformanceCounter();
 }
 
 /* Process SDL events - called from generated code yield points */
@@ -246,7 +262,8 @@ int main(int argc, char *argv[]) {
     frame_ctx.keys = &keys;
     frame_ctx.config = &config;
     frame_ctx.frame_count = 0;
-    frame_ctx.last_frame_ticks = SDL_GetTicks();
+    frame_ctx.perf_freq = SDL_GetPerformanceFrequency();
+    frame_ctx.last_frame_perf = SDL_GetPerformanceCounter();
 
     gb.frame_callback = on_frame;
     gb.frame_userdata = &frame_ctx;
