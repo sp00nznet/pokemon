@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <SDL_mutex.h>
 
 /* Game Boy APU (Audio Processing Unit) - 4 sound channels */
 
@@ -121,10 +122,16 @@ typedef struct apu_state {
     uint32_t cycles_per_sample; /* APU_CPU_FREQ / APU_SAMPLE_RATE */
 
     bool enabled;
+
+    /* Mutex protecting sample_buffer/sample_count (shared with audio thread) */
+    SDL_mutex *lock;
 } apu_state_t;
 
 /* Initialize APU to power-on state */
 void apu_init(apu_state_t *apu);
+
+/* Destroy APU (free mutex) */
+void apu_destroy(apu_state_t *apu);
 
 /* Advance APU by the given number of T-cycles */
 void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles);

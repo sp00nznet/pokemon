@@ -71,10 +71,12 @@ static void power_off(apu_state_t *apu);
 
 void apu_init(apu_state_t *apu)
 {
+    SDL_mutex *saved_lock = apu->lock; /* preserve if re-init */
     memset(apu, 0, sizeof(*apu));
     apu->cycles_per_sample = APU_CPU_FREQ / APU_SAMPLE_RATE;
     apu->enabled = false;
     apu->ch4.lfsr = 0x7FFF;
+    apu->lock = saved_lock ? saved_lock : SDL_CreateMutex();
 }
 
 /* ------------------------------------------------------------------ */
@@ -710,6 +712,14 @@ void apu_write_wave(apu_state_t *apu, uint8_t index, uint8_t val)
 /*  Main tick                                                         */
 /* ------------------------------------------------------------------ */
 
+void apu_destroy(apu_state_t *apu)
+{
+    if (apu->lock) {
+        SDL_DestroyMutex(apu->lock);
+        apu->lock = NULL;
+    }
+}
+
 void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
 {
     (void)gb;
@@ -719,12 +729,14 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
         apu->sample_counter += cycles;
         while (apu->sample_counter >= apu->cycles_per_sample) {
             apu->sample_counter -= apu->cycles_per_sample;
+            SDL_LockMutex(apu->lock);
             if (apu->sample_count < APU_BUFFER_SIZE) {
                 int idx = apu->sample_count * 2;
                 apu->sample_buffer[idx]     = 0.0f;
                 apu->sample_buffer[idx + 1] = 0.0f;
                 apu->sample_count++;
             }
+            SDL_UnlockMutex(apu->lock);
         }
         return;
     }
@@ -756,12 +768,14 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
         if (apu->sample_counter >= apu->cycles_per_sample) {
             apu->sample_counter -= apu->cycles_per_sample;
 
+            SDL_LockMutex(apu->lock);
             if (apu->sample_count < APU_BUFFER_SIZE) {
                 int idx = apu->sample_count * 2;
                 apu->sample_buffer[idx]     = mix_sample(apu, false); /* left  */
                 apu->sample_buffer[idx + 1] = mix_sample(apu, true);  /* right */
                 apu->sample_count++;
             }
+            SDL_UnlockMutex(apu->lock);
         }
     }
 }
@@ -772,6 +786,8 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
 
 int apu_get_samples(apu_state_t *apu, float *buf, int count)
 {
+    SDL_LockMutex(apu->lock);
+
     /* count is in stereo frames; each frame is 2 floats (L, R) */
     int available = apu->sample_count;
     if (count > available)
@@ -790,5 +806,6 @@ int apu_get_samples(apu_state_t *apu, float *buf, int count)
         apu->sample_count = remaining;
     }
 
+    SDL_UnlockMutex(apu->lock);
     return count;
 }

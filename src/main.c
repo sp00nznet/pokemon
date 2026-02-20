@@ -270,6 +270,7 @@ int main(int argc, char *argv[]) {
     /* Cleanup */
     platform_audio_stop(&audio);
     platform_audio_destroy(&audio);
+    apu_destroy(&apu);
     window_destroy(&window);
     free(rom);
 
