@@ -3,6 +3,7 @@
 #include "timer.h"
 #include "ppu.h"
 #include "apu.h"
+#include "serial.h"
 #include <stdio.h>
 
 /* Dispatch into generated interrupt handler code */
@@ -129,6 +130,9 @@ void hal_sync(gb_state_t *gb, uint32_t cycles) {
     if (gb->apu) {
         apu_tick(gb->apu, gb, cycles);
     }
+
+    /* Update serial transfer */
+    serial_tick(gb, cycles);
 
     /* Check and dispatch pending interrupts.
      * Skip if we're inside a HALT loop (HALT handles its own dispatch). */
