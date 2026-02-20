@@ -725,23 +725,29 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
     (void)gb;
 
     if (!apu->enabled) {
-        /* Still accumulate silence so the audio callback doesn't starve */
-        for (uint32_t i = 0; i < cycles; i++) {
-            apu->sample_accum += APU_SAMPLE_RATE;
-            if (apu->sample_accum >= APU_CPU_FREQ) {
-                apu->sample_accum -= APU_CPU_FREQ;
-                SDL_LockMutex(apu->lock);
-                if (apu->sample_count < APU_BUFFER_SIZE) {
-                    int idx = apu->sample_count * 2;
-                    apu->sample_buffer[idx]     = 0.0f;
-                    apu->sample_buffer[idx + 1] = 0.0f;
-                    apu->sample_count++;
-                }
-                SDL_UnlockMutex(apu->lock);
-            }
+        /* Fast path: compute silence samples without per-cycle loop.
+         * Each T-cycle adds APU_SAMPLE_RATE to the accumulator; a sample
+         * is emitted every time it crosses APU_CPU_FREQ. */
+        uint64_t total = (uint64_t)apu->sample_accum + (uint64_t)cycles * APU_SAMPLE_RATE;
+        uint32_t samples = (uint32_t)(total / APU_CPU_FREQ);
+        apu->sample_accum = (uint32_t)(total % APU_CPU_FREQ);
+        if (samples > 0) {
+            SDL_LockMutex(apu->lock);
+            int avail = APU_BUFFER_SIZE - apu->sample_count;
+            if ((int)samples > avail) samples = (uint32_t)avail;
+            /* Zero-fill interleaved stereo pairs */
+            memset(&apu->sample_buffer[apu->sample_count * 2], 0,
+                   samples * 2 * sizeof(float));
+            apu->sample_count += (int)samples;
+            SDL_UnlockMutex(apu->lock);
         }
         return;
     }
+
+    /* Batch sample writes: collect into a local buffer first, then
+     * copy under the lock in one shot to reduce lock contention. */
+    float local_buf[128 * 2]; /* enough for ~2.6ms of audio at 48kHz */
+    int local_count = 0;
 
     for (uint32_t i = 0; i < cycles; i++) {
         /* Tick channel frequency timers every T-cycle */
@@ -770,15 +776,26 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
         if (apu->sample_accum >= APU_CPU_FREQ) {
             apu->sample_accum -= APU_CPU_FREQ;
 
-            SDL_LockMutex(apu->lock);
-            if (apu->sample_count < APU_BUFFER_SIZE) {
-                int idx = apu->sample_count * 2;
-                apu->sample_buffer[idx]     = mix_sample(apu, false); /* left  */
-                apu->sample_buffer[idx + 1] = mix_sample(apu, true);  /* right */
-                apu->sample_count++;
+            if (local_count < 128) {
+                int idx = local_count * 2;
+                local_buf[idx]     = mix_sample(apu, false); /* left  */
+                local_buf[idx + 1] = mix_sample(apu, true);  /* right */
+                local_count++;
             }
-            SDL_UnlockMutex(apu->lock);
         }
+    }
+
+    /* Flush local buffer under lock */
+    if (local_count > 0) {
+        SDL_LockMutex(apu->lock);
+        int avail = APU_BUFFER_SIZE - apu->sample_count;
+        int to_copy = local_count < avail ? local_count : avail;
+        if (to_copy > 0) {
+            memcpy(&apu->sample_buffer[apu->sample_count * 2],
+                   local_buf, (size_t)(to_copy * 2) * sizeof(float));
+            apu->sample_count += to_copy;
+        }
+        SDL_UnlockMutex(apu->lock);
     }
 }
 
