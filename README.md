@@ -48,19 +48,28 @@ cmake --build build --target pokemon_red --config Release
 ./build/Release/pokemon_red.exe "roms/Pokemon Red Version.gb"
 ```
 
+## Screenshots
+
+The game boots and runs through the full intro sequence natively:
+
+| Game Freak | Intro Sequence | Title Screen | Main Menu |
+|:---:|:---:|:---:|:---:|
+| ![Copyright](screenshots/01_copyright.png) | ![Intro](screenshots/02_intro.png) | ![Title](screenshots/03_title.png) | ![Menu](screenshots/04_mainmenu.png) |
+
 ## Current Status
 
 **Working:**
 - Full ROM analysis and C code generation for all 64 banks
 - Hardware abstraction (CPU, memory/MBC3, PPU, timer, joypad, DMA, interrupts)
 - SDL2 window with pixel rendering
-- Game boots, runs through intro sequence
+- Game boots and runs through intro sequence, title screen, and main menu
 - Title screen renders with scrolling Pokemon silhouettes
+- Sprite decompression working (Nidorino intro scene)
 - Multiple LCD scene transitions work correctly
 
 **In Progress:**
 - Visual accuracy improvements
-- Further game progression (menus, gameplay)
+- Further game progression (gameplay)
 - Audio emulation
 
 ## Project Structure
