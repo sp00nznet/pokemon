@@ -1713,6 +1713,8 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
     fprintf(cf, "#include \"dispatch.h\"\n");
     fprintf(cf, "#include <stdio.h>\n");
     fprintf(cf, "#include <stdlib.h>\n\n");
+    fprintf(cf, "/* HRAM functions (defined in stubs.c) */\n");
+    fprintf(cf, "extern void func_b00_FF80(gb_state_t *gb);\n\n");
 
     /* Build a dispatch table as a switch statement.
      * For each bank, list known function entry points. */
