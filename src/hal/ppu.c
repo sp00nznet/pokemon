@@ -77,34 +77,43 @@ static void request_vblank_interrupt(gb_state_t *gb) {
 }
 
 /* --------------------------------------------------------------------------
- * Helper: check STAT interrupt conditions and fire if enabled
+ * Helper: evaluate the STAT interrupt line (OR of all enabled conditions).
+ * On real hardware the interrupt fires only on the RISING EDGE of this
+ * composite line, preventing spurious double-fires when multiple conditions
+ * overlap (known as "STAT blocking").
  * -------------------------------------------------------------------------- */
-static void check_stat_interrupts(ppu_state_t *ppu, gb_state_t *gb) {
-    bool fire = false;
+static bool eval_stat_line(const ppu_state_t *ppu) {
+    bool line = false;
 
     /* LYC == LY coincidence */
-    if ((ppu->stat & STAT_LYC_INT) && (ppu->ly == ppu->lyc)) {
-        fire = true;
-    }
+    if ((ppu->stat & STAT_LYC_INT) && (ppu->ly == ppu->lyc))
+        line = true;
 
     /* Mode-based STAT interrupts */
     switch (ppu->mode) {
         case PPU_MODE_HBLANK:
-            if (ppu->stat & STAT_HBLANK_INT) fire = true;
+            if (ppu->stat & STAT_HBLANK_INT) line = true;
             break;
         case PPU_MODE_VBLANK:
-            if (ppu->stat & STAT_VBLANK_INT) fire = true;
+            if (ppu->stat & STAT_VBLANK_INT) line = true;
             break;
         case PPU_MODE_OAM:
-            if (ppu->stat & STAT_OAM_INT) fire = true;
+            if (ppu->stat & STAT_OAM_INT) line = true;
             break;
         default:
             break;
     }
+    return line;
+}
 
-    if (fire) {
+static void check_stat_interrupts(ppu_state_t *ppu, gb_state_t *gb) {
+    bool new_line = eval_stat_line(ppu);
+
+    /* Fire only on rising edge (LOW → HIGH) */
+    if (new_line && !ppu->prev_stat_line) {
         request_stat_interrupt(gb);
     }
+    ppu->prev_stat_line = new_line;
 }
 
 /* ==========================================================================
@@ -195,19 +204,14 @@ void ppu_tick(ppu_state_t *ppu, gb_state_t *gb, uint32_t cycles) {
                         ppu->mode = PPU_MODE_VBLANK;
                         ppu->frame_ready = true;
                         request_vblank_interrupt(gb);
-                        check_stat_interrupts(ppu, gb);
                     } else {
                         /* Next visible scanline: back to OAM search */
                         ppu->mode = PPU_MODE_OAM;
-                        check_stat_interrupts(ppu, gb);
                     }
 
-                    /* Check LYC coincidence */
-                    if (ppu->ly == ppu->lyc) {
-                        if (ppu->stat & STAT_LYC_INT) {
-                            request_stat_interrupt(gb);
-                        }
-                    }
+                    /* Re-evaluate STAT line after LY change and mode change
+                     * (handles both LYC coincidence and mode interrupts) */
+                    check_stat_interrupts(ppu, gb);
                     progress = true;
                 }
                 break;
@@ -222,15 +226,11 @@ void ppu_tick(ppu_state_t *ppu, gb_state_t *gb, uint32_t cycles) {
                         ppu->ly = 0;
                         ppu->window_line = 0;
                         ppu->mode = PPU_MODE_OAM;
-                        check_stat_interrupts(ppu, gb);
                     }
 
-                    /* Check LYC coincidence */
-                    if (ppu->ly == ppu->lyc) {
-                        if (ppu->stat & STAT_LYC_INT) {
-                            request_stat_interrupt(gb);
-                        }
-                    }
+                    /* Re-evaluate STAT line after LY change
+                     * (handles LYC coincidence and mode interrupts) */
+                    check_stat_interrupts(ppu, gb);
                     progress = true;
                 }
                 break;

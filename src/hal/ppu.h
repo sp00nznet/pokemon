@@ -97,6 +97,9 @@ typedef struct ppu_state {
 
     /* Frame completion flag */
     bool frame_ready;
+
+    /* STAT interrupt edge detection: interrupt fires only on rising edge */
+    bool prev_stat_line;
 } ppu_state_t;
 
 /* Initialize PPU state */
