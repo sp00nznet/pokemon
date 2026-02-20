@@ -115,11 +115,10 @@ typedef struct apu_state {
     uint32_t frame_seq_counter;
     uint8_t frame_seq_step;
 
-    /* Sample generation */
+    /* Sample generation (Bresenham accumulator for exact timing) */
     float sample_buffer[APU_BUFFER_SIZE * 2]; /* interleaved stereo L,R */
     int sample_count;
-    uint32_t sample_counter;
-    uint32_t cycles_per_sample; /* APU_CPU_FREQ / APU_SAMPLE_RATE */
+    uint32_t sample_accum;      /* accumulates APU_SAMPLE_RATE per T-cycle */
 
     bool enabled;
 

@@ -73,7 +73,7 @@ void apu_init(apu_state_t *apu)
 {
     SDL_mutex *saved_lock = apu->lock; /* preserve if re-init */
     memset(apu, 0, sizeof(*apu));
-    apu->cycles_per_sample = APU_CPU_FREQ / APU_SAMPLE_RATE;
+    apu->sample_accum = 0;
     apu->enabled = false;
     apu->ch4.lfsr = 0x7FFF;
     apu->lock = saved_lock ? saved_lock : SDL_CreateMutex();
@@ -726,17 +726,19 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
 
     if (!apu->enabled) {
         /* Still accumulate silence so the audio callback doesn't starve */
-        apu->sample_counter += cycles;
-        while (apu->sample_counter >= apu->cycles_per_sample) {
-            apu->sample_counter -= apu->cycles_per_sample;
-            SDL_LockMutex(apu->lock);
-            if (apu->sample_count < APU_BUFFER_SIZE) {
-                int idx = apu->sample_count * 2;
-                apu->sample_buffer[idx]     = 0.0f;
-                apu->sample_buffer[idx + 1] = 0.0f;
-                apu->sample_count++;
+        for (uint32_t i = 0; i < cycles; i++) {
+            apu->sample_accum += APU_SAMPLE_RATE;
+            if (apu->sample_accum >= APU_CPU_FREQ) {
+                apu->sample_accum -= APU_CPU_FREQ;
+                SDL_LockMutex(apu->lock);
+                if (apu->sample_count < APU_BUFFER_SIZE) {
+                    int idx = apu->sample_count * 2;
+                    apu->sample_buffer[idx]     = 0.0f;
+                    apu->sample_buffer[idx + 1] = 0.0f;
+                    apu->sample_count++;
+                }
+                SDL_UnlockMutex(apu->lock);
             }
-            SDL_UnlockMutex(apu->lock);
         }
         return;
     }
@@ -763,10 +765,10 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
             apu->frame_seq_step = (apu->frame_seq_step + 1) & 7;
         }
 
-        /* Sample accumulation at APU_SAMPLE_RATE */
-        apu->sample_counter++;
-        if (apu->sample_counter >= apu->cycles_per_sample) {
-            apu->sample_counter -= apu->cycles_per_sample;
+        /* Sample accumulation: Bresenham for exact APU_SAMPLE_RATE */
+        apu->sample_accum += APU_SAMPLE_RATE;
+        if (apu->sample_accum >= APU_CPU_FREQ) {
+            apu->sample_accum -= APU_CPU_FREQ;
 
             SDL_LockMutex(apu->lock);
             if (apu->sample_count < APU_BUFFER_SIZE) {
