@@ -30,6 +30,7 @@ typedef struct {
     uint8_t sweep_timer;
     uint16_t shadow_freq;
     bool sweep_enabled;
+    bool sweep_negate_used;     /* true if negate was used since last trigger */
 
     /* Envelope */
     uint8_t envelope_period;

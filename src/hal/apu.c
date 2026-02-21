@@ -115,10 +115,12 @@ static uint16_t sweep_calculate(apu_state_t *apu)
 {
     uint16_t shifted = apu->ch1.shadow_freq >> apu->ch1.sweep_shift;
     uint16_t new_freq;
-    if (apu->ch1.sweep_direction)
+    if (apu->ch1.sweep_direction) {
         new_freq = apu->ch1.shadow_freq - shifted;
-    else
+        apu->ch1.sweep_negate_used = true;
+    } else {
         new_freq = apu->ch1.shadow_freq + shifted;
+    }
     return new_freq;
 }
 
@@ -324,20 +326,26 @@ static float mix_sample(apu_state_t *apu, bool right)
 static void trigger_ch1(apu_state_t *apu)
 {
     apu->ch1.enabled = true;
-    if (apu->ch1.length_counter == 0)
+    if (apu->ch1.length_counter == 0) {
         apu->ch1.length_counter = 64;
+        /* Length glitch: if length is being enabled on a step that clocks
+         * length (next step is even), the fresh counter is clocked immediately */
+        if (apu->ch1.length_enabled && (apu->frame_seq_step & 1) == 0)
+            apu->ch1.length_counter--;
+    }
 
     /* Reload frequency timer */
     apu->ch1.timer = (2048 - apu->ch1.frequency) * 4;
 
     /* Reload envelope */
     apu->ch1.envelope_timer = apu->ch1.envelope_period;
-    apu->ch1.volume = (apu->ch1.output_volume); /* volume from NRx2 upper 4 bits */
+    apu->ch1.volume = apu->ch1.output_volume;
 
     /* Sweep init */
     apu->ch1.shadow_freq = apu->ch1.frequency;
     apu->ch1.sweep_timer = apu->ch1.sweep_period ? apu->ch1.sweep_period : 8;
     apu->ch1.sweep_enabled = (apu->ch1.sweep_period > 0 || apu->ch1.sweep_shift > 0);
+    apu->ch1.sweep_negate_used = false;
 
     /* If shift is non-zero, do overflow check immediately */
     if (apu->ch1.sweep_shift > 0) {
@@ -353,8 +361,11 @@ static void trigger_ch1(apu_state_t *apu)
 static void trigger_ch2(apu_state_t *apu)
 {
     apu->ch2.enabled = true;
-    if (apu->ch2.length_counter == 0)
+    if (apu->ch2.length_counter == 0) {
         apu->ch2.length_counter = 64;
+        if (apu->ch2.length_enabled && (apu->frame_seq_step & 1) == 0)
+            apu->ch2.length_counter--;
+    }
 
     apu->ch2.timer = (2048 - apu->ch2.frequency) * 4;
 
@@ -368,8 +379,11 @@ static void trigger_ch2(apu_state_t *apu)
 static void trigger_ch3(apu_state_t *apu)
 {
     apu->ch3.enabled = true;
-    if (apu->ch3.length_counter == 0)
+    if (apu->ch3.length_counter == 0) {
         apu->ch3.length_counter = 256;
+        if (apu->ch3.length_enabled && (apu->frame_seq_step & 1) == 0)
+            apu->ch3.length_counter--;
+    }
 
     apu->ch3.timer = (2048 - apu->ch3.frequency) * 2;
     apu->ch3.position = 0;
@@ -381,8 +395,11 @@ static void trigger_ch3(apu_state_t *apu)
 static void trigger_ch4(apu_state_t *apu)
 {
     apu->ch4.enabled = true;
-    if (apu->ch4.length_counter == 0)
+    if (apu->ch4.length_counter == 0) {
         apu->ch4.length_counter = 64;
+        if (apu->ch4.length_enabled && (apu->frame_seq_step & 1) == 0)
+            apu->ch4.length_counter--;
+    }
 
     apu->ch4.timer = (int32_t)(divisor_table[apu->ch4.divisor_code] << apu->ch4.clock_shift);
     if (apu->ch4.timer == 0)
@@ -403,7 +420,13 @@ static void trigger_ch4(apu_state_t *apu)
 
 static void power_off(apu_state_t *apu)
 {
-    /* Zero all registers except wave RAM and length counters */
+    /* On DMG, length counters are preserved across power off.
+     * All other channel state and registers are zeroed. */
+    uint16_t len1 = apu->ch1.length_counter;
+    uint16_t len2 = apu->ch2.length_counter;
+    uint16_t len3 = apu->ch3.length_counter;
+    uint16_t len4 = apu->ch4.length_counter;
+
     memset(&apu->ch1, 0, sizeof(apu->ch1));
     memset(&apu->ch2, 0, sizeof(apu->ch2));
 
@@ -415,6 +438,12 @@ static void power_off(apu_state_t *apu)
 
     memset(&apu->ch4, 0, sizeof(apu->ch4));
     apu->ch4.lfsr = 0x7FFF;
+
+    /* Restore length counters */
+    apu->ch1.length_counter = len1;
+    apu->ch2.length_counter = len2;
+    apu->ch3.length_counter = len3;
+    apu->ch4.length_counter = len4;
 
     apu->nr50 = 0;
     apu->nr51 = 0;
@@ -452,11 +481,16 @@ void apu_write_reg(apu_state_t *apu, uint8_t reg, uint8_t val)
 
     switch (reg) {
     /* ---- Channel 1 (NR10-NR14) ---- */
-    case 0x10: /* NR10 - Sweep */
+    case 0x10: { /* NR10 - Sweep */
+        uint8_t old_direction = apu->ch1.sweep_direction;
         apu->ch1.sweep_period    = (val >> 4) & 0x07;
         apu->ch1.sweep_direction = (val >> 3) & 0x01;
         apu->ch1.sweep_shift     = val & 0x07;
+        /* Quirk: switching from negate to add without re-trigger disables Ch1 */
+        if (old_direction && !apu->ch1.sweep_direction && apu->ch1.sweep_negate_used)
+            apu->ch1.enabled = false;
         break;
+    }
 
     case 0x11: /* NR11 - Duty / Length */
         apu->ch1.duty           = (val >> 6) & 0x03;
@@ -477,12 +511,21 @@ void apu_write_reg(apu_state_t *apu, uint8_t reg, uint8_t val)
         apu->ch1.frequency = (apu->ch1.frequency & 0x700) | val;
         break;
 
-    case 0x14: /* NR14 - Trigger / Length enable / Frequency high */
+    case 0x14: { /* NR14 - Trigger / Length enable / Frequency high */
         apu->ch1.frequency = (apu->ch1.frequency & 0x00FF) | (uint16_t)((val & 0x07) << 8);
+        bool was_len = apu->ch1.length_enabled;
         apu->ch1.length_enabled = (val & 0x40) != 0;
+        /* Extra length clock: enabling length on a length-clocking step */
+        if (!was_len && apu->ch1.length_enabled && (apu->frame_seq_step & 1) == 0 &&
+            apu->ch1.length_counter > 0) {
+            apu->ch1.length_counter--;
+            if (apu->ch1.length_counter == 0 && !(val & 0x80))
+                apu->ch1.enabled = false;
+        }
         if (val & 0x80)
             trigger_ch1(apu);
         break;
+    }
 
     /* ---- Channel 2 (NR21-NR24) ---- */
     case 0x16: /* NR21 - Duty / Length */
@@ -503,12 +546,20 @@ void apu_write_reg(apu_state_t *apu, uint8_t reg, uint8_t val)
         apu->ch2.frequency = (apu->ch2.frequency & 0x700) | val;
         break;
 
-    case 0x19: /* NR24 - Trigger / Length enable / Frequency high */
+    case 0x19: { /* NR24 - Trigger / Length enable / Frequency high */
         apu->ch2.frequency = (apu->ch2.frequency & 0x00FF) | (uint16_t)((val & 0x07) << 8);
+        bool was_len = apu->ch2.length_enabled;
         apu->ch2.length_enabled = (val & 0x40) != 0;
+        if (!was_len && apu->ch2.length_enabled && (apu->frame_seq_step & 1) == 0 &&
+            apu->ch2.length_counter > 0) {
+            apu->ch2.length_counter--;
+            if (apu->ch2.length_counter == 0 && !(val & 0x80))
+                apu->ch2.enabled = false;
+        }
         if (val & 0x80)
             trigger_ch2(apu);
         break;
+    }
 
     /* ---- Channel 3 (NR30-NR34) ---- */
     case 0x1A: /* NR30 - DAC enable */
@@ -529,12 +580,20 @@ void apu_write_reg(apu_state_t *apu, uint8_t reg, uint8_t val)
         apu->ch3.frequency = (apu->ch3.frequency & 0x700) | val;
         break;
 
-    case 0x1E: /* NR34 - Trigger / Length enable / Frequency high */
+    case 0x1E: { /* NR34 - Trigger / Length enable / Frequency high */
         apu->ch3.frequency = (apu->ch3.frequency & 0x00FF) | (uint16_t)((val & 0x07) << 8);
+        bool was_len = apu->ch3.length_enabled;
         apu->ch3.length_enabled = (val & 0x40) != 0;
+        if (!was_len && apu->ch3.length_enabled && (apu->frame_seq_step & 1) == 0 &&
+            apu->ch3.length_counter > 0) {
+            apu->ch3.length_counter--;
+            if (apu->ch3.length_counter == 0 && !(val & 0x80))
+                apu->ch3.enabled = false;
+        }
         if (val & 0x80)
             trigger_ch3(apu);
         break;
+    }
 
     /* ---- Channel 4 (NR41-NR44) ---- */
     case 0x20: /* NR41 - Length */
@@ -556,11 +615,19 @@ void apu_write_reg(apu_state_t *apu, uint8_t reg, uint8_t val)
         apu->ch4.divisor_code = val & 0x07;
         break;
 
-    case 0x23: /* NR44 - Trigger / Length enable */
+    case 0x23: { /* NR44 - Trigger / Length enable */
+        bool was_len = apu->ch4.length_enabled;
         apu->ch4.length_enabled = (val & 0x40) != 0;
+        if (!was_len && apu->ch4.length_enabled && (apu->frame_seq_step & 1) == 0 &&
+            apu->ch4.length_counter > 0) {
+            apu->ch4.length_counter--;
+            if (apu->ch4.length_counter == 0 && !(val & 0x80))
+                apu->ch4.enabled = false;
+        }
         if (val & 0x80)
             trigger_ch4(apu);
         break;
+    }
 
     /* ---- Master control (NR50-NR52 handled above for NR52) ---- */
     case 0x24: /* NR50 - Master volume */
