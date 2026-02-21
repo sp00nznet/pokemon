@@ -770,14 +770,25 @@ uint8_t apu_read_wave(apu_state_t *apu, uint8_t index)
 {
     if (index >= 16) return 0xFF;
 
-    /* If ch3 is actively reading wave RAM, return the byte it is reading.
-       For simplicity we allow reads at any time. */
+    /* On DMG, if Ch3 is actively playing, reads return the byte at the
+     * current playback position, not the addressed byte. */
+    if (apu->ch3.enabled)
+        return apu->ch3.wave_ram[apu->ch3.position / 2];
+
     return apu->ch3.wave_ram[index];
 }
 
 void apu_write_wave(apu_state_t *apu, uint8_t index, uint8_t val)
 {
     if (index >= 16) return;
+
+    /* On DMG, if Ch3 is actively playing, writes go to the byte at the
+     * current playback position, not the addressed byte. */
+    if (apu->ch3.enabled) {
+        apu->ch3.wave_ram[apu->ch3.position / 2] = val;
+        return;
+    }
+
     apu->ch3.wave_ram[index] = val;
 }
 
