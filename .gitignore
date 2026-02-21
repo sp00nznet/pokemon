@@ -43,5 +43,11 @@ Desktop.ini
 *.cfg
 *.sav
 
+# Reference emulator (BGB) and frame captures
+tools/bgb/
+reference_frames/
+*.dem
+*.state
+
 # Misc
 -p
