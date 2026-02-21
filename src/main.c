@@ -56,6 +56,7 @@ typedef struct {
     platform_audio_t *audio;
     key_bindings_t *keys;
     game_config_t *config;
+    char state_path[512];     /* Save state file path */
     int frame_count;
     Uint64 last_frame_perf;   /* SDL_GetPerformanceCounter at last frame */
     Uint64 perf_freq;         /* SDL_GetPerformanceFrequency */
@@ -116,6 +117,10 @@ static void on_frame(gb_state_t *gb, void *userdata) {
                     window_toggle_fullscreen(ctx->window);
                 if (event.key.keysym.scancode == ctx->keys->key_mute)
                     platform_audio_toggle_mute(ctx->audio);
+                if (event.key.keysym.scancode == ctx->keys->key_save_state)
+                    save_state_write(gb, ctx->state_path);
+                if (event.key.keysym.scancode == ctx->keys->key_load_state)
+                    save_state_load(gb, ctx->state_path);
             }
             break;
         case SDL_KEYUP:
@@ -226,6 +231,8 @@ int main(int argc, char *argv[]) {
     frame_ctx.audio = &audio;
     frame_ctx.keys = &keys;
     frame_ctx.config = &config;
+    save_state_make_path(frame_ctx.state_path, sizeof(frame_ctx.state_path),
+                         config.save_dir, GAME_NAME);
     frame_ctx.frame_count = 0;
     frame_ctx.perf_freq = SDL_GetPerformanceFrequency();
     frame_ctx.last_frame_perf = SDL_GetPerformanceCounter();

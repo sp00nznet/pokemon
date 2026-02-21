@@ -16,4 +16,14 @@ bool save_load(gb_state_t *gb, const char *path);
 void save_make_path(char *buf, size_t bufsz, const char *save_dir,
                     const char *game_name);
 
+/* Save state (full emulator snapshot) to file */
+bool save_state_write(gb_state_t *gb, const char *path);
+
+/* Load state (full emulator snapshot) from file */
+bool save_state_load(gb_state_t *gb, const char *path);
+
+/* Generate save state path */
+void save_state_make_path(char *buf, size_t bufsz, const char *save_dir,
+                          const char *game_name);
+
 #endif /* SAVE_H */
