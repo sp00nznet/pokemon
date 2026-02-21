@@ -33,6 +33,17 @@ void cpu_init(gb_state_t *gb) {
 }
 
 void cpu_check_interrupts(gb_state_t *gb) {
+    /* EI delay: promote ime_pending to ime, but don't service interrupts
+     * this check.  The instruction after EI has already executed by the
+     * time we reach this point; however, giving one full check-cycle of
+     * delay matches the hardware behaviour in the cooperative model. */
+    if (gb->ime_pending) {
+        gb->ime = 1;
+        gb->ime_pending = 0;
+        /* Still need to un-halt if pending, but don't service yet */
+        if (!gb->halted) return;
+    }
+
     if (!gb->ime && !gb->halted) return;
 
     uint8_t ie = gb->mem->ie_reg;
@@ -61,16 +72,19 @@ void cpu_check_interrupts(gb_state_t *gb) {
             gb->cycles += 20;
 
             dispatch_call(gb, 0, isr_addr);
-
-            /* Re-enable interrupts after ISR returns (ISR typically ends
-             * with RETI which sets IME=1, but in case the generated code
-             * for RETI doesn't set it, ensure it's restored) */
             return;
         }
     }
 }
 
 void cpu_halt(gb_state_t *gb) {
+    /* EI followed by HALT: HALT counts as the "next instruction" after EI,
+     * so promote ime_pending to ime before entering the halt loop. */
+    if (gb->ime_pending) {
+        gb->ime = 1;
+        gb->ime_pending = 0;
+    }
+
     gb->halted = 1;
 
     /* Advance cycles until an interrupt is pending */

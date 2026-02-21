@@ -269,7 +269,7 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         fprintf(f, "%sgb->ime = 0;\n", ws);
         break;
     case OP_EI:
-        fprintf(f, "%sgb->ime = 1;\n", ws);
+        fprintf(f, "%sgb->ime_pending = 1;\n", ws);
         break;
 
     /* ----- LD ----- */
