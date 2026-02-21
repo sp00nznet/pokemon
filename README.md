@@ -50,7 +50,7 @@ cmake --build build --target pokemon_red --config Release
 
 ## Screenshots
 
-The game boots and runs through the full intro sequence natively:
+The game boots, runs through the full intro sequence, and progresses into gameplay:
 
 | Game Freak | Intro Sequence | Title Screen | Main Menu |
 |:---:|:---:|:---:|:---:|
@@ -62,7 +62,8 @@ The game boots and runs through the full intro sequence natively:
 - Full ROM analysis and C code generation for all 64 banks
 - Hardware abstraction (CPU, memory/MBC3, PPU, APU, timer, joypad, DMA, serial, interrupts)
 - SDL2 window with pixel rendering and audio output
-- Game boots and runs through intro sequence, title screen, and main menu
+- Full game progression: intro → title → main menu → palette fade → overworld
+- Zero dispatch errors, zero stub fallbacks during full title-to-gameplay sequence
 - Title screen renders with scrolling Pokemon silhouettes
 - Sprite decompression working (Nidorino intro scene)
 - Multiple LCD scene transitions work correctly
@@ -76,7 +77,6 @@ The game boots and runs through the full intro sequence natively:
 - SRAM save/load with persistence on exit
 
 **In Progress:**
-- Further game progression (exploring menus and gameplay)
 - Visual accuracy refinements
 - Audio quality tuning (envelope, sweep timing)
 
