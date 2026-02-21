@@ -8,6 +8,12 @@
 
 #define FRAME_SEQ_PERIOD 8192  /* T-cycles per frame sequencer tick (512 Hz) */
 
+/* High-pass filter charge factor per output sample.
+ * The Game Boy has an RC high-pass on the audio DAC output.
+ * At 48 kHz sample rate the per-sample factor is ~0.999958,
+ * derived from the hardware's ~7 ms time constant. */
+#define HPF_CHARGE_FACTOR 0.999958f
+
 /* Duty waveforms: 1 = high, 0 = low.  Index by [duty][position]. */
 static const uint8_t duty_table[4][8] = {
     { 0, 0, 0, 0, 0, 0, 0, 1 },  /* 12.5% */
@@ -799,13 +805,29 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
         uint32_t samples = (uint32_t)(total / APU_CPU_FREQ);
         apu->sample_accum = (uint32_t)(total % APU_CPU_FREQ);
         if (samples > 0) {
+            /* Run HPF on silence to decay capacitor (prevents pop on re-enable) */
+            float local_buf[128 * 2];
+            uint32_t remaining = samples;
             SDL_LockMutex(apu->lock);
-            int avail = APU_BUFFER_SIZE - apu->sample_count;
-            if ((int)samples > avail) samples = (uint32_t)avail;
-            /* Zero-fill interleaved stereo pairs */
-            memset(&apu->sample_buffer[apu->sample_count * 2], 0,
-                   samples * 2 * sizeof(float));
-            apu->sample_count += (int)samples;
+            while (remaining > 0) {
+                uint32_t batch = remaining < 128 ? remaining : 128;
+                for (uint32_t j = 0; j < batch; j++) {
+                    float out_l = 0.0f - apu->hpf_capacitor_l;
+                    apu->hpf_capacitor_l = out_l * HPF_CHARGE_FACTOR;
+                    float out_r = 0.0f - apu->hpf_capacitor_r;
+                    apu->hpf_capacitor_r = out_r * HPF_CHARGE_FACTOR;
+                    local_buf[j * 2]     = out_l;
+                    local_buf[j * 2 + 1] = out_r;
+                }
+                int avail = APU_BUFFER_SIZE - apu->sample_count;
+                int to_copy = (int)batch < avail ? (int)batch : avail;
+                if (to_copy > 0) {
+                    memcpy(&apu->sample_buffer[apu->sample_count * 2],
+                           local_buf, (size_t)(to_copy * 2) * sizeof(float));
+                    apu->sample_count += to_copy;
+                }
+                remaining -= batch;
+            }
             SDL_UnlockMutex(apu->lock);
         }
         return;
@@ -845,8 +867,15 @@ void apu_tick(apu_state_t *apu, gb_state_t *gb, uint32_t cycles)
 
             if (local_count < 128) {
                 int idx = local_count * 2;
-                local_buf[idx]     = mix_sample(apu, false); /* left  */
-                local_buf[idx + 1] = mix_sample(apu, true);  /* right */
+                float raw_l = mix_sample(apu, false);
+                float raw_r = mix_sample(apu, true);
+                /* High-pass filter (DC-blocking capacitor) */
+                float out_l = raw_l - apu->hpf_capacitor_l;
+                apu->hpf_capacitor_l = out_l * HPF_CHARGE_FACTOR;
+                float out_r = raw_r - apu->hpf_capacitor_r;
+                apu->hpf_capacitor_r = out_r * HPF_CHARGE_FACTOR;
+                local_buf[idx]     = out_l;
+                local_buf[idx + 1] = out_r;
                 local_count++;
             }
         }

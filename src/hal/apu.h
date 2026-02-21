@@ -121,6 +121,10 @@ typedef struct apu_state {
     int sample_count;
     uint32_t sample_accum;      /* accumulates APU_SAMPLE_RATE per T-cycle */
 
+    /* High-pass filter (models the Game Boy's DC-blocking capacitor) */
+    float hpf_capacitor_l;
+    float hpf_capacitor_r;
+
     bool enabled;
 
     /* Mutex protecting sample_buffer/sample_count (shared with audio thread) */
