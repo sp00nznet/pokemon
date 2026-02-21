@@ -93,41 +93,6 @@ static uint8_t *load_rom(const char *path, size_t *size_out) {
     return data;
 }
 
-/* Dump framebuffer as BMP for debugging */
-static void dump_framebuffer_bmp(const uint32_t fb[SCREEN_HEIGHT][SCREEN_WIDTH], int frame) {
-    char path[64];
-    snprintf(path, sizeof(path), "frame_%04d.bmp", frame);
-    FILE *f = fopen(path, "wb");
-    if (!f) return;
-    int w = SCREEN_WIDTH, h = SCREEN_HEIGHT;
-    int row_bytes = w * 3;
-    int pad = (4 - (row_bytes % 4)) % 4;
-    int data_size = (row_bytes + pad) * h;
-    int file_size = 54 + data_size;
-    /* BMP header */
-    uint8_t hdr[54] = {0};
-    hdr[0]='B'; hdr[1]='M';
-    hdr[2]=file_size; hdr[3]=file_size>>8; hdr[4]=file_size>>16; hdr[5]=file_size>>24;
-    hdr[10]=54;
-    hdr[14]=40;
-    hdr[18]=w; hdr[19]=w>>8;
-    hdr[22]=h; hdr[23]=h>>8;
-    hdr[26]=1; hdr[28]=24;
-    fwrite(hdr, 1, 54, f);
-    /* BMP is bottom-up */
-    uint8_t zero[4] = {0};
-    for (int y = h - 1; y >= 0; y--) {
-        for (int x = 0; x < w; x++) {
-            uint32_t px = fb[y][x]; /* 0xAARRGGBB */
-            uint8_t bgr[3] = { (uint8_t)(px), (uint8_t)(px >> 8), (uint8_t)(px >> 16) };
-            fwrite(bgr, 1, 3, f);
-        }
-        if (pad) fwrite(zero, 1, pad, f);
-    }
-    fclose(f);
-    fprintf(stderr, "Dumped %s\n", path);
-}
-
 /* Frame callback - called from hal_sync when PPU produces a frame */
 static void on_frame(gb_state_t *gb, void *userdata) {
     frame_ctx_t *ctx = (frame_ctx_t *)userdata;
