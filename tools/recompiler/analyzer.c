@@ -527,6 +527,9 @@ static void trace_from(analysis_ctx_t *ctx, int bank, uint16_t start,
                         if (is_bankswitch && switch_bank > 0 &&
                             switch_bank < ctx->num_banks) {
                             call_bank = switch_bank;
+                            /* Also record wildcard so the function gets
+                             * created in ALL banks for robustness. */
+                            record_xbank_call(ctx, target, 0xFF);
                         }
                         record_xbank_call(ctx, target, call_bank);
                     } else {
@@ -1151,6 +1154,57 @@ void analysis_run(analysis_ctx_t *ctx)
             }
         }
         printf("Seeded %d farcall target entry points.\n", farcall_count);
+    }
+
+    /* Pass 1.7: Seed jump table targets from bank 0.
+     * func_b00_1B40 uses a jump table at ROM 0x1CC1 containing 14 entries
+     * (2 bytes each, little-endian address). The code does:
+     *   LD HL, $1CC1; ADD HL, BC; LD A,(HL+); LD H,(HL); LD L,A; JP (HL)
+     * The analyzer cannot resolve JP (HL) statically, so we seed them here. */
+    {
+        const uint16_t jt_addr = 0x1CC1;  /* ROM offset in bank 0 */
+        const int jt_entries = 14;
+        int jt_seeded = 0;
+        bank_analysis_t *b0 = &ctx->banks[0];
+        for (int i = 0; i < jt_entries; i++) {
+            size_t off = (size_t)jt_addr + i * 2;
+            if (off + 2 > ctx->rom_size) break;
+            uint16_t target = ctx->rom_data[off] |
+                              ((uint16_t)ctx->rom_data[off + 1] << 8);
+            if (target < 0x4000 && target >= 0x0150 &&
+                b0->function_count < MAX_FUNCTIONS_PER_BANK &&
+                !find_function(b0, target)) {
+                add_function(b0, target, 0, false);
+                jt_seeded++;
+            }
+        }
+        printf("Seeded %d jump table targets from 0x%04X.\n", jt_seeded, jt_addr);
+    }
+
+    /* Pass 1.8: Manually seed banked functions that the analyzer misses.
+     * These are bank-0 CALL targets in the switchable area where the
+     * LD A,n bank-switch detection works but the target function doesn't
+     * get generated (absorbed by neighboring functions or tracing fails). */
+    {
+        struct { uint8_t bank; uint16_t addr; } manual_seeds[] = {
+            { 0x03, 0x4E04 },  /* called from func_b00_2BCF */
+            { 0x01, 0x72EA },  /* called from func_b00_30E8 */
+        };
+        int manual_count = sizeof(manual_seeds) / sizeof(manual_seeds[0]);
+        for (int i = 0; i < manual_count; i++) {
+            uint8_t  b = manual_seeds[i].bank;
+            uint16_t a = manual_seeds[i].addr;
+            if (b < ctx->num_banks) {
+                bank_analysis_t *ba = &ctx->banks[b];
+                if (ba->function_count < MAX_FUNCTIONS_PER_BANK &&
+                    !find_function(ba, a)) {
+                    add_function(ba, a, b, false);
+                }
+                /* Also ensure an xbank_call record exists */
+                record_xbank_call(ctx, a, b);
+            }
+        }
+        printf("Seeded %d manual banked function entries.\n", manual_count);
     }
 
     /* Seed 0x4000 as entry point for all banks.

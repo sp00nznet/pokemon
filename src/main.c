@@ -53,7 +53,7 @@ extern void dispatch_run(gb_state_t *gb);
 /* Maximum scheduled frame dumps */
 #define MAX_DUMP_FRAMES 64
 /* Maximum scheduled auto-input events */
-#define MAX_AUTO_INPUTS 64
+#define MAX_AUTO_INPUTS 256
 /* Duration to hold an auto-input button (frames) */
 #define AUTO_INPUT_HOLD 10
 
@@ -133,6 +133,97 @@ static bool is_dump_frame(frame_ctx_t *ctx) {
     return false;
 }
 
+/* Dump PPU/sprite debug state for a frame */
+static void dump_debug_state(gb_state_t *gb, int frame) {
+    ppu_state_t *ppu = gb->ppu;
+    printf("\n=== Debug State @ Frame %d ===\n", frame);
+    printf("LCDC=%02X SCX=%d SCY=%d WX=%d WY=%d LY=%d\n",
+           ppu->lcdc, ppu->scx, ppu->scy, ppu->wx, ppu->wy, ppu->ly);
+    printf("BGP=%02X OBP0=%02X OBP1=%02X\n", ppu->bgp, ppu->obp[0], ppu->obp[1]);
+    printf("OAM visible sprites:\n");
+    for (int i = 0; i < 40; i++) {
+        uint8_t y = gb->mem->oam[i * 4 + 0];
+        uint8_t x = gb->mem->oam[i * 4 + 1];
+        uint8_t tile = gb->mem->oam[i * 4 + 2];
+        uint8_t flags = gb->mem->oam[i * 4 + 3];
+        if (y >= 1 && y < 160 && x > 0 && x < 168) {
+            printf("  [%2d] scr(%3d,%3d) tile=%02X flags=%02X pal=%d%s%s\n",
+                   i, x - 8, y - 16, tile, flags,
+                   (flags >> 4) & 1,
+                   (flags & 0x20) ? " xflip" : "",
+                   (flags & 0x40) ? " yflip" : "");
+        }
+    }
+    /* Full shadow OAM dump - ALL 40 entries */
+    printf("Shadow OAM @ 0xC300 (all 40 entries):\n");
+    for (int i = 0; i < 40; i++) {
+        uint16_t addr = 0xC300 + (uint16_t)(i * 4);
+        uint8_t y = mem_read8(gb, addr);
+        uint8_t x = mem_read8(gb, addr + 1);
+        uint8_t tile = mem_read8(gb, addr + 2);
+        uint8_t flags = mem_read8(gb, addr + 3);
+        if (y != 0 || x != 0 || tile != 0 || flags != 0) {
+            printf("  [%2d] @%04X Y=%3d X=%3d tile=%02X flags=%02X scr(%3d,%3d)\n",
+                   i, addr, y, x, tile, flags, x - 8, y - 16);
+        }
+    }
+    /* Player sprite state data (wSpriteStateData1 @ C100, 16 bytes per entry) */
+    printf("wSpriteStateData1 (first 8 entries, 16 bytes each):\n");
+    for (int i = 0; i < 8; i++) {
+        uint16_t base = 0xC100 + (uint16_t)(i * 16);
+        printf("  [%d] @%04X:", i, base);
+        for (int j = 0; j < 16; j++) {
+            printf(" %02X", mem_read8(gb, base + (uint16_t)j));
+        }
+        printf("\n");
+    }
+    /* wSpriteStateData2 @ C200 */
+    printf("wSpriteStateData2 (first 8 entries, 16 bytes each):\n");
+    for (int i = 0; i < 8; i++) {
+        uint16_t base = 0xC200 + (uint16_t)(i * 16);
+        printf("  [%d] @%04X:", i, base);
+        for (int j = 0; j < 16; j++) {
+            printf(" %02X", mem_read8(gb, base + (uint16_t)j));
+        }
+        printf("\n");
+    }
+    /* Key WRAM variables for player/sprite system */
+    printf("Key WRAM: wNumSprites=%02X wXCoord=%02X wYCoord=%02X wCurMap=%02X\n",
+           mem_read8(gb, 0xD4E1),   /* wNumSprites */
+           mem_read8(gb, 0xD362),   /* wXCoord (player X on map) */
+           mem_read8(gb, 0xD361),   /* wYCoord (player Y on map) */
+           mem_read8(gb, 0xD35E));  /* wCurMap */
+    printf("wWalkCounter=%02X wPlayerDir=%02X wSpriteCount=%02X\n",
+           mem_read8(gb, 0xCFC5),   /* wWalkCounter */
+           mem_read8(gb, 0xC109),   /* wPlayerFacingDirection */
+           mem_read8(gb, 0xD4E1));  /* wNumSprites on current map */
+    /* Game phase indicators */
+    printf("hLoadedROMBank=%02X wd72e=%02X wIsInBattle=%02X\n",
+           mem_read8(gb, 0xFFB8),   /* hLoadedROMBank */
+           mem_read8(gb, 0xD72E),   /* wd72e flags */
+           mem_read8(gb, 0xCC57));  /* wIsInBattle */
+    printf("wCurrentMenuItem=%02X wTextBoxID=%02X wCurOpponent=%02X\n",
+           mem_read8(gb, 0xCC26),   /* wCurrentMenuItem */
+           mem_read8(gb, 0xD125),   /* wTextBoxID */
+           mem_read8(gb, 0xD059));  /* wCurOpponent */
+    /* Player name (11 bytes at D158) - shows if name was entered */
+    printf("wPlayerName=");
+    for (int i = 0; i < 11; i++)
+        printf("%02X", mem_read8(gb, 0xD158 + (uint16_t)i));
+    printf("\n");
+    /* WRAM 0xD700 area: game progress flags */
+    printf("wd72d=%02X wd732=%02X wPlayTimeH=%02X wPlayTimeM=%02X\n",
+           mem_read8(gb, 0xD72D),   /* wd72d flags */
+           mem_read8(gb, 0xD732),   /* wd732 flags */
+           mem_read8(gb, 0xDA40),   /* wPlayTimeHours */
+           mem_read8(gb, 0xDA41));  /* wPlayTimeMinutes */
+    /* Map connection/state */
+    printf("wLastMap=%02X wDestMap=%02X wGameProgressFlags=%02X\n",
+           mem_read8(gb, 0xD365),   /* wLastMap */
+           mem_read8(gb, 0xFF8B),   /* hFF8B (temp) */
+           mem_read8(gb, 0xD747));  /* wFlags_D747 */
+}
+
 /* Frame callback - called from hal_sync when PPU produces a frame */
 /* Process auto-input events for the current frame */
 static void process_auto_inputs(gb_state_t *gb, frame_ctx_t *ctx) {
@@ -161,6 +252,7 @@ static void on_frame(gb_state_t *gb, void *userdata) {
         snprintf(path, sizeof(path), "frame_%05d.bmp", ctx->frame_count);
         screenshot_save((const uint32_t *)gb->ppu->framebuffer,
                         SCREEN_WIDTH, SCREEN_HEIGHT, path);
+        dump_debug_state(gb, ctx->frame_count);
     }
 
     /* Auto-exit after stop frame */
