@@ -92,3 +92,9 @@ add_executable(gen_bgb_demo tools/gen_bgb_demo.c)
 if(MSVC)
     target_compile_definitions(gen_bgb_demo PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+
+# Frame comparison tool
+add_executable(frame_compare tools/frame_compare.c)
+if(MSVC)
+    target_compile_definitions(frame_compare PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()

@@ -27,16 +27,19 @@ static void interpret_fallback(gb_state_t *gb, uint16_t start_addr) {
 void func_b00_FF80(gb_state_t *gb) {
     /* This is typically the OAM DMA wait loop that games copy to HRAM.
      * The standard routine:
-     *   FF80: LD A, source_high
-     *   FF82: LDH (DMA), A     ; start DMA
-     *   FF84: LD A, 0x28       ; wait 40 iterations
+     *   FF80: LD A, source_high    (opcode 0x3E, operand at FF81)
+     *   FF82: LDH (DMA), A        ; start DMA
+     *   FF84: LD A, 0x28          ; wait 40 iterations
      *   FF86: DEC A
      *   FF87: JR NZ, FF86
      *   FF89: RET
-     * We emulate it by just triggering a DMA from the stored source. */
-    uint8_t dma_source = mem_read8(gb, 0xFF46);
-    if (dma_source == 0) dma_source = 0xC0; /* Default: copy from WRAM */
-    /* Trigger OAM DMA */
+     *
+     * The DMA source high byte is the immediate operand of "LD A, n"
+     * stored at HRAM address 0xFF81 when the game copies this routine
+     * to HRAM during initialization. Read it from there. */
+    uint8_t dma_source = gb->mem->hram[0xFF81 - 0xFF80];
+    if (dma_source == 0) dma_source = 0xC3; /* Default for Pokemon Red */
+    /* Trigger OAM DMA: copy 160 bytes from (dma_source << 8) to OAM */
     mem_write8(gb, 0xFF46, dma_source);
     gb->cycles += 160; /* DMA takes ~160 M-cycles */
 }

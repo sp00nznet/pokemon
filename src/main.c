@@ -52,14 +52,17 @@ extern void dispatch_run(gb_state_t *gb);
 
 /* Maximum scheduled frame dumps */
 #define MAX_DUMP_FRAMES 64
+/* Maximum scheduled auto-input events */
+#define MAX_AUTO_INPUTS 64
+/* Duration to hold an auto-input button (frames) */
+#define AUTO_INPUT_HOLD 10
 
-/* Scheduled input event for --dump-frames mode */
+/* Auto-input event: press a button at a specific frame */
 typedef struct {
-    int frame;
-    int scancode;   /* SDL scancode to press, or -1 for none */
+    int frame;        /* Frame to press the button */
+    uint8_t button;   /* Button mask (BTN_A, BTN_START, etc.) */
     bool is_direction;
-    uint8_t button; /* joypad button mask */
-} scheduled_input_t;
+} auto_input_t;
 
 /* State passed to frame callback */
 typedef struct {
@@ -76,6 +79,9 @@ typedef struct {
     int dump_frames[MAX_DUMP_FRAMES];
     int dump_frame_count;
     int stop_at_frame;        /* Auto-exit after this frame (-1 = disabled) */
+    /* Automated input injection */
+    auto_input_t auto_inputs[MAX_AUTO_INPUTS];
+    int auto_input_count;
 } frame_ctx_t;
 
 /* Game Boy frame period: 4194304 Hz / (456*154 lines) ≈ 59.7275 fps
@@ -128,9 +134,26 @@ static bool is_dump_frame(frame_ctx_t *ctx) {
 }
 
 /* Frame callback - called from hal_sync when PPU produces a frame */
+/* Process auto-input events for the current frame */
+static void process_auto_inputs(gb_state_t *gb, frame_ctx_t *ctx) {
+    for (int i = 0; i < ctx->auto_input_count; i++) {
+        auto_input_t *inp = &ctx->auto_inputs[i];
+        if (ctx->frame_count == inp->frame) {
+            /* Press the button */
+            joypad_press(gb->joypad, gb, inp->button, inp->is_direction);
+        } else if (ctx->frame_count == inp->frame + AUTO_INPUT_HOLD) {
+            /* Release the button after hold duration */
+            joypad_release(gb->joypad, inp->button, inp->is_direction);
+        }
+    }
+}
+
 static void on_frame(gb_state_t *gb, void *userdata) {
     frame_ctx_t *ctx = (frame_ctx_t *)userdata;
     ctx->frame_count++;
+
+    /* Process automated inputs (press/release at scheduled frames) */
+    process_auto_inputs(gb, ctx);
 
     /* Auto-dump scheduled frames */
     if (is_dump_frame(ctx)) {
@@ -218,11 +241,58 @@ static int parse_frame_list(const char *str, int *out, int max) {
     return count;
 }
 
+/* Parse a button name to button mask and direction flag.
+ * Format: "a", "b", "start", "select", "up", "down", "left", "right" */
+static bool parse_button_name(const char *name, uint8_t *button, bool *is_dir) {
+    if (strcmp(name, "a") == 0)      { *button = BTN_A;      *is_dir = false; return true; }
+    if (strcmp(name, "b") == 0)      { *button = BTN_B;      *is_dir = false; return true; }
+    if (strcmp(name, "start") == 0)  { *button = BTN_START;  *is_dir = false; return true; }
+    if (strcmp(name, "select") == 0) { *button = BTN_SELECT; *is_dir = false; return true; }
+    if (strcmp(name, "up") == 0)     { *button = BTN_UP;     *is_dir = true;  return true; }
+    if (strcmp(name, "down") == 0)   { *button = BTN_DOWN;   *is_dir = true;  return true; }
+    if (strcmp(name, "left") == 0)   { *button = BTN_LEFT;   *is_dir = true;  return true; }
+    if (strcmp(name, "right") == 0)  { *button = BTN_RIGHT;  *is_dir = true;  return true; }
+    return false;
+}
+
+/* Parse "frame:button" auto-input specs. Returns count. */
+static int parse_auto_inputs(int argc, char *argv[], int start_idx,
+                              auto_input_t *out, int max) {
+    int count = 0;
+    for (int i = start_idx; i < argc && count < max; i++) {
+        /* Stop if it looks like another flag */
+        if (argv[i][0] == '-') break;
+
+        char buf[64];
+        strncpy(buf, argv[i], sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+
+        char *colon = strchr(buf, ':');
+        if (!colon) break; /* not a frame:button spec */
+
+        *colon = '\0';
+        int frame = atoi(buf);
+        uint8_t button;
+        bool is_dir;
+        if (!parse_button_name(colon + 1, &button, &is_dir)) {
+            fprintf(stderr, "Unknown button: %s\n", colon + 1);
+            break;
+        }
+        out[count].frame = frame;
+        out[count].button = button;
+        out[count].is_direction = is_dir;
+        count++;
+    }
+    return count;
+}
+
 int main(int argc, char *argv[]) {
     /* Parse command-line arguments */
     int dump_frames[MAX_DUMP_FRAMES] = {0};
     int dump_frame_count = 0;
     int stop_at_frame = -1;
+    auto_input_t auto_inputs[MAX_AUTO_INPUTS] = {0};
+    int auto_input_count = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--dump-frames") == 0 && i + 1 < argc) {
@@ -234,6 +304,15 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--stop-at") == 0 && i + 1 < argc) {
             stop_at_frame = atoi(argv[++i]);
             printf("Will stop at frame %d\n", stop_at_frame);
+        } else if (strcmp(argv[i], "--auto-input") == 0 && i + 1 < argc) {
+            auto_input_count = parse_auto_inputs(argc, argv, i + 1,
+                                                  auto_inputs, MAX_AUTO_INPUTS);
+            printf("Auto-inputs: %d events\n", auto_input_count);
+            for (int j = 0; j < auto_input_count; j++)
+                printf("  Frame %d: button 0x%02X %s\n",
+                       auto_inputs[j].frame, auto_inputs[j].button,
+                       auto_inputs[j].is_direction ? "(dir)" : "(btn)");
+            i += auto_input_count; /* skip consumed args */
         }
     }
 
@@ -315,6 +394,8 @@ int main(int argc, char *argv[]) {
     frame_ctx.stop_at_frame = stop_at_frame;
     frame_ctx.dump_frame_count = dump_frame_count;
     memcpy(frame_ctx.dump_frames, dump_frames, sizeof(dump_frames));
+    frame_ctx.auto_input_count = auto_input_count;
+    memcpy(frame_ctx.auto_inputs, auto_inputs, sizeof(auto_inputs));
     frame_ctx.perf_freq = SDL_GetPerformanceFrequency();
     frame_ctx.last_frame_perf = SDL_GetPerformanceCounter();
 
