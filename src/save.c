@@ -332,3 +332,72 @@ bool save_state_load(gb_state_t *gb, const char *path) {
     printf("Save state loaded from %s\n", path);
     return true;
 }
+
+bool screenshot_save(const uint32_t *framebuffer, int width, int height,
+                     const char *path) {
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "Screenshot: cannot open %s\n", path);
+        return false;
+    }
+
+    /* BMP file header (14 bytes) + DIB header (40 bytes) */
+    uint32_t row_size = (uint32_t)(width * 3 + 3) & ~3u; /* pad to 4-byte boundary */
+    uint32_t pixel_data = 54;
+    uint32_t file_size = pixel_data + row_size * (uint32_t)height;
+
+    uint8_t bmp_header[54] = {0};
+    /* BM magic */
+    bmp_header[0] = 'B'; bmp_header[1] = 'M';
+    /* File size */
+    bmp_header[2] = (uint8_t)(file_size);
+    bmp_header[3] = (uint8_t)(file_size >> 8);
+    bmp_header[4] = (uint8_t)(file_size >> 16);
+    bmp_header[5] = (uint8_t)(file_size >> 24);
+    /* Pixel data offset */
+    bmp_header[10] = (uint8_t)pixel_data;
+    /* DIB header size (BITMAPINFOHEADER = 40) */
+    bmp_header[14] = 40;
+    /* Width */
+    bmp_header[18] = (uint8_t)(width);
+    bmp_header[19] = (uint8_t)(width >> 8);
+    /* Height (negative = top-down) */
+    int neg_height = -height;
+    bmp_header[22] = (uint8_t)(neg_height);
+    bmp_header[23] = (uint8_t)(neg_height >> 8);
+    bmp_header[24] = (uint8_t)(neg_height >> 16);
+    bmp_header[25] = (uint8_t)(neg_height >> 24);
+    /* Planes */
+    bmp_header[26] = 1;
+    /* Bits per pixel */
+    bmp_header[28] = 24;
+    /* Image size */
+    uint32_t img_size = row_size * (uint32_t)height;
+    bmp_header[34] = (uint8_t)(img_size);
+    bmp_header[35] = (uint8_t)(img_size >> 8);
+    bmp_header[36] = (uint8_t)(img_size >> 16);
+    bmp_header[37] = (uint8_t)(img_size >> 24);
+
+    fwrite(bmp_header, 1, 54, f);
+
+    /* Write pixel data (RGBA framebuffer -> BGR BMP rows) */
+    uint8_t *row = (uint8_t *)calloc(1, row_size);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            uint32_t px = framebuffer[y * width + x];
+            /* Framebuffer is 0xAARRGGBB (ARGB32) */
+            uint8_t r = (uint8_t)(px >> 16);
+            uint8_t g = (uint8_t)(px >> 8);
+            uint8_t b = (uint8_t)(px);
+            row[x * 3 + 0] = b;
+            row[x * 3 + 1] = g;
+            row[x * 3 + 2] = r;
+        }
+        fwrite(row, 1, row_size, f);
+    }
+    free(row);
+
+    fclose(f);
+    printf("Screenshot saved: %s\n", path);
+    return true;
+}

@@ -50,6 +50,17 @@ extern void dispatch_run(gb_state_t *gb);
 /* Cycles per frame at ~59.73 FPS */
 #define CYCLES_PER_FRAME 70224
 
+/* Maximum scheduled frame dumps */
+#define MAX_DUMP_FRAMES 64
+
+/* Scheduled input event for --dump-frames mode */
+typedef struct {
+    int frame;
+    int scancode;   /* SDL scancode to press, or -1 for none */
+    bool is_direction;
+    uint8_t button; /* joypad button mask */
+} scheduled_input_t;
+
 /* State passed to frame callback */
 typedef struct {
     platform_window_t *window;
@@ -58,8 +69,13 @@ typedef struct {
     game_config_t *config;
     char state_path[512];     /* Save state file path */
     int frame_count;
+    int screenshot_counter;   /* For sequential screenshot filenames */
     Uint64 last_frame_perf;   /* SDL_GetPerformanceCounter at last frame */
     Uint64 perf_freq;         /* SDL_GetPerformanceFrequency */
+    /* Automated frame dump mode */
+    int dump_frames[MAX_DUMP_FRAMES];
+    int dump_frame_count;
+    int stop_at_frame;        /* Auto-exit after this frame (-1 = disabled) */
 } frame_ctx_t;
 
 /* Game Boy frame period: 4194304 Hz / (456*154 lines) ≈ 59.7275 fps
@@ -94,10 +110,41 @@ static uint8_t *load_rom(const char *path, size_t *size_out) {
     return data;
 }
 
+static void take_screenshot(gb_state_t *gb, frame_ctx_t *ctx) {
+    char path[256];
+    snprintf(path, sizeof(path), "screenshot_%04d_frame%d.bmp",
+             ctx->screenshot_counter++, ctx->frame_count);
+    screenshot_save((const uint32_t *)gb->ppu->framebuffer,
+                    SCREEN_WIDTH, SCREEN_HEIGHT, path);
+}
+
+/* Check if current frame is a scheduled dump frame */
+static bool is_dump_frame(frame_ctx_t *ctx) {
+    for (int i = 0; i < ctx->dump_frame_count; i++) {
+        if (ctx->dump_frames[i] == ctx->frame_count)
+            return true;
+    }
+    return false;
+}
+
 /* Frame callback - called from hal_sync when PPU produces a frame */
 static void on_frame(gb_state_t *gb, void *userdata) {
     frame_ctx_t *ctx = (frame_ctx_t *)userdata;
     ctx->frame_count++;
+
+    /* Auto-dump scheduled frames */
+    if (is_dump_frame(ctx)) {
+        char path[256];
+        snprintf(path, sizeof(path), "frame_%05d.bmp", ctx->frame_count);
+        screenshot_save((const uint32_t *)gb->ppu->framebuffer,
+                        SCREEN_WIDTH, SCREEN_HEIGHT, path);
+    }
+
+    /* Auto-exit after stop frame */
+    if (ctx->stop_at_frame >= 0 && ctx->frame_count >= ctx->stop_at_frame) {
+        gb->running = false;
+        return;
+    }
 
     /* Render the frame */
     window_update(ctx->window, (const uint32_t *)gb->ppu->framebuffer,
@@ -121,6 +168,8 @@ static void on_frame(gb_state_t *gb, void *userdata) {
                     save_state_write(gb, ctx->state_path);
                 if (event.key.keysym.scancode == ctx->keys->key_load_state)
                     save_state_load(gb, ctx->state_path);
+                if (event.key.keysym.scancode == ctx->keys->key_screenshot)
+                    take_screenshot(gb, ctx);
             }
             break;
         case SDL_KEYUP:
@@ -157,8 +206,36 @@ bool hal_process_events(gb_state_t *gb) {
     return gb->running;
 }
 
+/* Parse comma-separated frame numbers into array. Returns count. */
+static int parse_frame_list(const char *str, int *out, int max) {
+    int count = 0;
+    const char *p = str;
+    while (*p && count < max) {
+        out[count++] = atoi(p);
+        while (*p && *p != ',') p++;
+        if (*p == ',') p++;
+    }
+    return count;
+}
+
 int main(int argc, char *argv[]) {
-    (void)argc; (void)argv;
+    /* Parse command-line arguments */
+    int dump_frames[MAX_DUMP_FRAMES] = {0};
+    int dump_frame_count = 0;
+    int stop_at_frame = -1;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--dump-frames") == 0 && i + 1 < argc) {
+            dump_frame_count = parse_frame_list(argv[++i], dump_frames, MAX_DUMP_FRAMES);
+            printf("Will dump %d frames: ", dump_frame_count);
+            for (int j = 0; j < dump_frame_count; j++)
+                printf("%d%s", dump_frames[j], j < dump_frame_count - 1 ? "," : "");
+            printf("\n");
+        } else if (strcmp(argv[i], "--stop-at") == 0 && i + 1 < argc) {
+            stop_at_frame = atoi(argv[++i]);
+            printf("Will stop at frame %d\n", stop_at_frame);
+        }
+    }
 
     /* Ensure stderr is unbuffered so no output is lost on kill */
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -234,6 +311,10 @@ int main(int argc, char *argv[]) {
     save_state_make_path(frame_ctx.state_path, sizeof(frame_ctx.state_path),
                          config.save_dir, GAME_NAME);
     frame_ctx.frame_count = 0;
+    frame_ctx.screenshot_counter = 0;
+    frame_ctx.stop_at_frame = stop_at_frame;
+    frame_ctx.dump_frame_count = dump_frame_count;
+    memcpy(frame_ctx.dump_frames, dump_frames, sizeof(dump_frames));
     frame_ctx.perf_freq = SDL_GetPerformanceFrequency();
     frame_ctx.last_frame_perf = SDL_GetPerformanceCounter();
 

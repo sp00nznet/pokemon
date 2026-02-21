@@ -19,6 +19,7 @@ void input_init(key_bindings_t *bindings) {
     bindings->key_mute = SDL_SCANCODE_M;
     bindings->key_save_state = SDL_SCANCODE_F5;
     bindings->key_load_state = SDL_SCANCODE_F9;
+    bindings->key_screenshot = SDL_SCANCODE_F12;
 }
 
 void input_handle_key(gb_state_t *gb, const key_bindings_t *bindings,

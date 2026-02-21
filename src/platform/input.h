@@ -21,6 +21,7 @@ typedef struct {
     int key_mute;
     int key_save_state;
     int key_load_state;
+    int key_screenshot;
 } key_bindings_t;
 
 /* Initialize input with default key bindings */

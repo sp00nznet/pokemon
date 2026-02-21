@@ -26,4 +26,8 @@ bool save_state_load(gb_state_t *gb, const char *path);
 void save_state_make_path(char *buf, size_t bufsz, const char *save_dir,
                           const char *game_name);
 
+/* Save framebuffer as BMP screenshot */
+bool screenshot_save(const uint32_t *framebuffer, int width, int height,
+                     const char *path);
+
 #endif /* SAVE_H */
