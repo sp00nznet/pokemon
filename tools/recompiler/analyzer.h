@@ -57,6 +57,8 @@ typedef struct {
 
     /* Bitmap of addresses known to be code (vs data) */
     bool           is_code[BANK_SIZE];
+    /* Bitmap of addresses that are instruction starts (first byte only) */
+    bool           is_inst_start[BANK_SIZE];
     uint8_t        bank;
 } bank_analysis_t;
 

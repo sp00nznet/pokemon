@@ -50,11 +50,15 @@ cmake --build build --target pokemon_red --config Release
 
 ## Screenshots
 
-The game boots, runs through the full intro sequence, and progresses into gameplay:
+The game boots, runs through the full intro sequence with animated Pokemon, and progresses into gameplay:
 
-| Game Freak | Intro Sequence | Title Screen | Main Menu |
-|:---:|:---:|:---:|:---:|
-| ![Copyright](screenshots/01_copyright.png) | ![Intro](screenshots/02_intro.png) | ![Title](screenshots/03_title.png) | ![Menu](screenshots/04_mainmenu.png) |
+| Game Freak | Intro Pokemon | Title Screen |
+|:---:|:---:|:---:|
+| ![Copyright](screenshots/01_copyright.png) | ![Intro Pokemon](screenshots/02_intro_pokemon.png) | ![Title](screenshots/03_title.png) |
+
+| Main Menu | Nidorino Battle | Oak's Intro |
+|:---:|:---:|:---:|
+| ![Menu](screenshots/04_mainmenu.png) | ![Nidorino](screenshots/05_nidorino.png) | ![Oak](screenshots/06_oak_intro.png) |
 
 ## Current Status
 
@@ -62,13 +66,14 @@ The game boots, runs through the full intro sequence, and progresses into gamepl
 - Full ROM analysis and C code generation for all 64 banks
 - Hardware abstraction (CPU, memory/MBC3, PPU, APU, timer, joypad, DMA, serial, interrupts)
 - SDL2 window with pixel rendering and audio output
-- Full game progression: intro → title → main menu → palette fade → overworld
+- Full game progression: intro (with animated Pokemon) → title → main menu → palette fade → overworld
+- Intro sequence renders correctly: Game Freak logo, cycling Pokemon next to Ash, Nidorino vs Gengar battle, Oak's intro with starter Pokemon
 - Zero dispatch errors, zero stub fallbacks during full title-to-gameplay sequence
-- Title screen renders with scrolling Pokemon silhouettes
-- Sprite decompression working (Nidorino intro scene)
+- Sprite decompression and tile VRAM transfers working (VBlank-synchronized via DelayFrame)
 - Multiple LCD scene transitions work correctly
 - Audio: all 4 channels (2x pulse, wave, noise) with proper DAC centering and Bresenham sample timing
 - Non-local return (POP trick) detection automated in codegen via table-driven NLR system
+- Instruction boundary tracking (`is_inst_start` bitmap) prevents mid-instruction block splits
 - STAT interrupt edge detection (STAT blocking) with write glitch emulation
 - Timer accuracy: TAC/DIV write glitches, overflow delay, falling-edge detection
 - Serial link cable timeout (completes transfers with 0xFF for no device)
@@ -77,6 +82,7 @@ The game boots, runs through the full intro sequence, and progresses into gamepl
 - SRAM save/load with persistence on exit
 
 **In Progress:**
+- Further gameplay progression (Oak's lab, Route 1, Viridian City)
 - Visual accuracy refinements
 - Audio quality tuning (envelope, sweep timing)
 

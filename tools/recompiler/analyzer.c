@@ -106,6 +106,10 @@ static basic_block_t *split_block_at(bank_analysis_t *ba, basic_block_t *orig,
 {
     if (addr <= orig->start_addr || addr >= orig->end_addr)
         return NULL;
+    /* Only split at instruction boundaries, not mid-instruction */
+    uint16_t local = addr & (BANK_SIZE - 1);
+    if (ba->is_inst_start[local] == false && ba->is_code[local])
+        return NULL;  /* This is an operand byte, not an instruction start */
     basic_block_t *tail = alloc_block(ba);
     if (!tail) return NULL;
 
@@ -350,9 +354,11 @@ static void trace_from(analysis_ctx_t *ctx, int bank, uint16_t start,
                 goto next_worklist;
             }
 
-            /* Already marked as code by another block? Then this is
-             * a block boundary. */
-            if (pc != addr && ba->is_code[pc_local]) {
+            /* Already marked as an instruction start by another block?
+             * Then this is a block boundary.  We use is_inst_start
+             * (not is_code) so that operand bytes of multi-byte
+             * instructions don't trigger spurious boundaries. */
+            if (pc != addr && ba->is_inst_start[pc_local]) {
                 block->end_addr       = pc;
                 block->inst_count     = inst_count;
                 block->has_fallthrough = true;
@@ -391,10 +397,12 @@ static void trace_from(analysis_ctx_t *ctx, int bank, uint16_t start,
                 block->exit_type  = BRANCH_NONE;
                 block->has_fallthrough = false;
                 ba->is_code[pc_local] = true;
+                ba->is_inst_start[pc_local] = true;
                 goto next_worklist;
             }
 
             /* Mark bytes as code */
+            ba->is_inst_start[pc_local] = true;  /* Only first byte */
             for (int b = 0; b < inst.length; b++) {
                 uint16_t off = pc_local + b;
                 if (off < BANK_SIZE)
@@ -1156,29 +1164,51 @@ void analysis_run(analysis_ctx_t *ctx)
         printf("Seeded %d farcall target entry points.\n", farcall_count);
     }
 
-    /* Pass 1.7: Seed jump table targets from bank 0.
-     * func_b00_1B40 uses a jump table at ROM 0x1CC1 containing 14 entries
-     * (2 bytes each, little-endian address). The code does:
-     *   LD HL, $1CC1; ADD HL, BC; LD A,(HL+); LD H,(HL); LD L,A; JP (HL)
-     * The analyzer cannot resolve JP (HL) statically, so we seed them here. */
+    /* Pass 1.7: Seed jump table targets.
+     * Some functions use JP (HL) with table-driven targets that the analyzer
+     * cannot resolve statically. We parse known tables here. */
     {
-        const uint16_t jt_addr = 0x1CC1;  /* ROM offset in bank 0 */
-        const int jt_entries = 14;
-        int jt_seeded = 0;
-        bank_analysis_t *b0 = &ctx->banks[0];
-        for (int i = 0; i < jt_entries; i++) {
-            size_t off = (size_t)jt_addr + i * 2;
-            if (off + 2 > ctx->rom_size) break;
-            uint16_t target = ctx->rom_data[off] |
-                              ((uint16_t)ctx->rom_data[off + 1] << 8);
-            if (target < 0x4000 && target >= 0x0150 &&
-                b0->function_count < MAX_FUNCTIONS_PER_BANK &&
-                !find_function(b0, target)) {
-                add_function(b0, target, 0, false);
-                jt_seeded++;
+        struct {
+            uint8_t  bank;      /* Bank containing the table */
+            uint16_t addr;      /* Address of table in the bank */
+            int      entries;   /* Number of 2-byte LE address entries */
+        } jump_tables[] = {
+            /* Bank 0: TextCommandProcessor at func_b00_1B40, table at 0x1CC1 */
+            { 0x00, 0x1CC1, 14 },
+            /* Bank 1: func_b01_6596, table at 0x665E (game state dispatch) */
+            { 0x01, 0x665E, 16 },
+        };
+        int jt_count = sizeof(jump_tables) / sizeof(jump_tables[0]);
+        for (int jt = 0; jt < jt_count; jt++) {
+            uint8_t  bank = jump_tables[jt].bank;
+            uint16_t jt_addr = jump_tables[jt].addr;
+            int      jt_entries = jump_tables[jt].entries;
+            /* Compute ROM offset: bank 0 is at 0x0000, banks 1+ at bank*0x4000 */
+            size_t rom_base = (bank == 0) ? 0 : (size_t)bank * 0x4000;
+            /* For bank 0, addr is the ROM offset directly.
+             * For banks 1+, switchable area starts at 0x4000,
+             * so rom_offset = rom_base + (addr - 0x4000). */
+            size_t table_rom_off = (bank == 0) ? (size_t)jt_addr
+                                               : rom_base + (jt_addr - 0x4000);
+            int jt_seeded = 0;
+            bank_analysis_t *ba = &ctx->banks[bank];
+            uint16_t addr_min = (bank == 0) ? 0x0150 : 0x4000;
+            uint16_t addr_max = (bank == 0) ? 0x4000 : 0x8000;
+            for (int i = 0; i < jt_entries; i++) {
+                size_t off = table_rom_off + (size_t)i * 2;
+                if (off + 2 > ctx->rom_size) break;
+                uint16_t target = ctx->rom_data[off] |
+                                  ((uint16_t)ctx->rom_data[off + 1] << 8);
+                if (target >= addr_min && target < addr_max &&
+                    ba->function_count < MAX_FUNCTIONS_PER_BANK &&
+                    !find_function(ba, target)) {
+                    add_function(ba, target, bank, false);
+                    jt_seeded++;
+                }
             }
+            printf("Seeded %d jump table targets from bank %d @ 0x%04X.\n",
+                   jt_seeded, bank, jt_addr);
         }
-        printf("Seeded %d jump table targets from 0x%04X.\n", jt_seeded, jt_addr);
     }
 
     /* Pass 1.8: Manually seed banked functions that the analyzer misses.
@@ -1189,6 +1219,9 @@ void analysis_run(analysis_ctx_t *ctx)
         struct { uint8_t bank; uint16_t addr; } manual_seeds[] = {
             { 0x03, 0x4E04 },  /* called from func_b00_2BCF */
             { 0x01, 0x72EA },  /* called from func_b00_30E8 */
+            { 0x00, 0x03A6 },  /* dispatch_jump target from bank 1 (func_b01_536E) */
+            { 0x00, 0x1F54 },  /* dispatch_jump target from bank 1 (func_b01_5A5F) */
+            { 0x01, 0x6692 },  /* jump table target in bank 1 (naming screen) */
         };
         int manual_count = sizeof(manual_seeds) / sizeof(manual_seeds[0]);
         for (int i = 0; i < manual_count; i++) {
