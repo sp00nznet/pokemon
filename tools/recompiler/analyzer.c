@@ -1222,6 +1222,25 @@ void analysis_run(analysis_ctx_t *ctx)
             { 0x00, 0x03A6 },  /* dispatch_jump target from bank 1 (func_b01_536E) */
             { 0x00, 0x1F54 },  /* dispatch_jump target from bank 1 (func_b01_5A5F) */
             { 0x01, 0x6692 },  /* jump table target in bank 1 (naming screen) */
+            { 0x17, 0x40B0 },  /* overworld - called 951x during gameplay */
+            { 0x01, 0x4C34 },  /* overworld - called 891x during gameplay */
+            { 0x11, 0x69A0 },  /* called 61x during overworld init */
+            { 0x0D, 0x7DA5 },  /* called once during map loading */
+            { 0x17, 0x40C0 },  /* overworld - called 444x during movement */
+            { 0x14, 0x6673 },  /* called 10x during overworld */
+            { 0x0F, 0x6F12 },  /* called 2x during overworld */
+            { 0x17, 0x40CE },  /* overworld movement handler */
+            { 0x17, 0x5B79 },  /* overworld movement handler */
+            /* Intro/dialogue dispatch seeds (found during full intro progression) */
+            { 0x07, 0x4B0E },  /* text/dialogue handler - 318x during intro */
+            { 0x12, 0x4168 },  /* intro sequence handler - 45x */
+            { 0x06, 0x4E5B },  /* intro sequence handler - 38x */
+            { 0x12, 0x4170 },  /* intro sequence handler - 3x */
+            { 0x06, 0x63E0 },  /* intro sequence handler - 3x */
+            { 0x07, 0x50CF },  /* text/dialogue handler - 2x */
+            { 0x07, 0x6965 },  /* text/dialogue handler - 1x */
+            { 0x07, 0x5114 },  /* text/dialogue handler - 1x */
+            /* { 0x03, 0x43FF } - REMOVED: breaks warps and NPC interaction */
         };
         int manual_count = sizeof(manual_seeds) / sizeof(manual_seeds[0]);
         for (int i = 0; i < manual_count; i++) {
