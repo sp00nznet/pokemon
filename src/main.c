@@ -17,6 +17,7 @@
 #include "platform/renderer.h"
 #include "platform/audio.h"
 #include "platform/input.h"
+#include "platform/menu.h"
 
 /* Generated code dispatch - declared in generated/dispatch.h */
 extern void dispatch_init(gb_state_t *gb);
@@ -290,6 +291,31 @@ static void on_frame(gb_state_t *gb, void *userdata) {
         case SDL_KEYUP:
             input_handle_key(gb, ctx->keys, event.key.keysym.scancode, false);
             break;
+        case SDL_SYSWMEVENT: {
+            int menu_id = menu_handle_event(&event);
+            switch (menu_id) {
+            case IDM_SAVE_STATE:
+                save_state_write(gb, ctx->state_path);
+                break;
+            case IDM_LOAD_STATE:
+                save_state_load(gb, ctx->state_path);
+                break;
+            case IDM_EXIT:
+                gb->running = false;
+                return;
+            case IDM_SCALE_1X:
+            case IDM_SCALE_2X:
+            case IDM_SCALE_3X:
+            case IDM_SCALE_4X: {
+                int scale = menu_id - IDM_SCALE_1X + 1;
+                window_set_scale(ctx->window, scale);
+                menu_update_scale_check(scale);
+                ctx->config->window_scale = scale;
+                break;
+            }
+            }
+            break;
+        }
         }
     }
 
@@ -460,6 +486,8 @@ int main(int argc, char *argv[]) {
         free(rom);
         return 1;
     }
+
+    menu_init(&window, config.window_scale);
 
     if (config.start_fullscreen) {
         window_toggle_fullscreen(&window);

@@ -1241,6 +1241,34 @@ void analysis_run(analysis_ctx_t *ctx)
             { 0x07, 0x6965 },  /* text/dialogue handler - 1x */
             { 0x07, 0x5114 },  /* text/dialogue handler - 1x */
             /* { 0x03, 0x43FF } - REMOVED: breaks warps and NPC interaction */
+            /* Pallet Town / Route 1 dispatch seeds (Oak script, wild battles) */
+            { 0x07, 0x4AAF },  /* text handler - 60x during Pallet Town */
+            { 0x1E, 0x4FCE },  /* map script handler - 26x */
+            { 0x06, 0x4E81 },  /* map handler - 24x */
+            { 0x1D, 0x47DE },  /* map script handler - 16x */
+            { 0x0F, 0x5B00 },  /* called 2x during Route 1 */
+            { 0x1E, 0x4DDB },  /* map script handler - 1x */
+            { 0x1C, 0x4D24 },  /* map script handler - 1x */
+            { 0x16, 0x4EB3 },  /* event handler - 1x */
+            { 0x16, 0x4D99 },  /* event handler - 1x */
+            { 0x07, 0x4AB9 },  /* text handler - 1x */
+            { 0x02, 0x50C6 },  /* called 1x during map transition */
+            { 0x06, 0x4EB2 },  /* Oak sprite/animation handler - 812x */
+            { 0x06, 0x4ED2 },  /* Oak event continuation - 994x */
+            { 0x06, 0x4F97 },  /* Oak event handler - 1x */
+            { 0x06, 0x57A1 },  /* map event handler - 1x */
+            { 0x1C, 0x487E },  /* script handler - 2x */
+            { 0x1C, 0x45BA },  /* warp script processor - 1x */
+            { 0x01, 0x5D5F },  /* bank 1 handler - 1x */
+            { 0x06, 0x4F12 },  /* Oak dialogue/event - 1066x */
+            { 0x06, 0x5A2B },  /* Oak event handler - 174x */
+            { 0x07, 0x5D3A },  /* text handler - 2x */
+            { 0x06, 0x4FB5 },  /* Oak event handler - 1x */
+            { 0x14, 0x4935 },  /* event handler - 1x */
+            { 0x06, 0x57E6 },  /* map event handler - 1x */
+            { 0x16, 0x544C },  /* sprite/NPC handler - 150x+ per frame */
+            { 0x06, 0x4F4B },  /* Oak walk-back handler - 709x */
+            { 0x00, 0x24D7 },  /* bank 0 jump target - 3x */
         };
         int manual_count = sizeof(manual_seeds) / sizeof(manual_seeds[0]);
         for (int i = 0; i < manual_count; i++) {

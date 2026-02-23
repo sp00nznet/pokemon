@@ -36,6 +36,7 @@ set(PLATFORM_SOURCES
     src/platform/renderer.c
     src/platform/audio.c
     src/platform/input.c
+    src/platform/menu.c
 )
 
 # Common game sources

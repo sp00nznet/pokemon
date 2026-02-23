@@ -25,6 +25,9 @@ int window_init(platform_window_t *win, const char *title, int scale);
 void window_update(platform_window_t *win, const uint32_t *framebuffer,
                    int width, int height);
 
+/* Set window scale (1-4) and resize */
+void window_set_scale(platform_window_t *win, int scale);
+
 /* Toggle fullscreen */
 void window_toggle_fullscreen(platform_window_t *win);
 

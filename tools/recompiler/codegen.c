@@ -1765,6 +1765,11 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
     fprintf(cf, "        dispatch_call(gb, (uint8_t)gb->mem->rom_bank, addr);\n");
     fprintf(cf, "        return;\n");
     fprintf(cf, "    }\n");
+    fprintf(cf, "    /* HRAM routines (OAM DMA wait loop at FF80-FF89) */\n");
+    fprintf(cf, "    if (addr >= 0xFF80 && addr <= 0xFF89) {\n");
+    fprintf(cf, "        func_b00_FF80(gb);\n");
+    fprintf(cf, "        return;\n");
+    fprintf(cf, "    }\n");
     fprintf(cf, "    /* Bank 0 addresses */\n");
     fprintf(cf, "    switch (addr) {\n");
 

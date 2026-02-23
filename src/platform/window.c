@@ -56,6 +56,13 @@ void window_update(platform_window_t *win, const uint32_t *framebuffer,
     SDL_RenderPresent(win->renderer);
 }
 
+void window_set_scale(platform_window_t *win, int scale) {
+    win->scale = scale;
+    SDL_SetWindowSize(win->window, GB_WIDTH * scale, GB_HEIGHT * scale);
+    SDL_SetWindowPosition(win->window,
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
 void window_toggle_fullscreen(platform_window_t *win) {
     win->fullscreen = !win->fullscreen;
     SDL_SetWindowFullscreen(win->window,
