@@ -1720,9 +1720,14 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
      * For each bank, list known function entry points. */
     fprintf(cf, "/* Dispatch table entry */\n");
     fprintf(cf, "typedef void (*dispatch_fn_t)(gb_state_t *gb);\n\n");
+    fprintf(cf, "/* Debug logging toggle (defined in main.c) */\n");
+    fprintf(cf, "extern int dispatch_debug_enabled;\n\n");
 
     /* Generate dispatch_call */
     fprintf(cf, "void dispatch_call(gb_state_t *gb, uint8_t bank, uint16_t addr) {\n");
+    fprintf(cf, "    if (dispatch_debug_enabled) {\n");
+    fprintf(cf, "        fprintf(stderr, \"dispatch_call: bank=%%02X addr=%%04X\\n\", bank, addr);\n");
+    fprintf(cf, "    }\n");
     fprintf(cf, "    switch (bank) {\n");
 
     for (int b = 0; b < ctx->analysis->num_banks; b++) {

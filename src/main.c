@@ -203,26 +203,47 @@ static void dump_debug_state(gb_state_t *gb, int frame) {
            mem_read8(gb, 0xFFB8),   /* hLoadedROMBank */
            mem_read8(gb, 0xD72E),   /* wd72e flags */
            mem_read8(gb, 0xCC57));  /* wIsInBattle */
-    printf("wCurrentMenuItem=%02X wTextBoxID=%02X wCurOpponent=%02X\n",
+    printf("wCurrentMenuItem=%02X wTextBoxID=%02X wCurOpponent=%02X wD12B=%02X\n",
            mem_read8(gb, 0xCC26),   /* wCurrentMenuItem */
            mem_read8(gb, 0xD125),   /* wTextBoxID */
-           mem_read8(gb, 0xD059));  /* wCurOpponent */
+           mem_read8(gb, 0xD059),   /* wCurOpponent */
+           mem_read8(gb, 0xD12B));  /* checked by func_b01_5A5F */
     /* Player name (11 bytes at D158) - shows if name was entered */
     printf("wPlayerName=");
     for (int i = 0; i < 11; i++)
         printf("%02X", mem_read8(gb, 0xD158 + (uint16_t)i));
     printf("\n");
     /* WRAM 0xD700 area: game progress flags */
-    printf("wd72d=%02X wd732=%02X wPlayTimeH=%02X wPlayTimeM=%02X\n",
+    printf("wd730=%02X wd72d=%02X wd732=%02X wPlayTimeH=%02X wPlayTimeM=%02X\n",
+           mem_read8(gb, 0xD730),   /* wd730 (bit5=ignore joypad, bit0=auto move) */
            mem_read8(gb, 0xD72D),   /* wd72d flags */
            mem_read8(gb, 0xD732),   /* wd732 flags */
            mem_read8(gb, 0xDA40),   /* wPlayTimeHours */
            mem_read8(gb, 0xDA41));  /* wPlayTimeMinutes */
+    printf("wJoyIgnore=%02X wMapScript=%02X wCurMapTileset=%02X wMovementFlags=%02X\n",
+           mem_read8(gb, 0xCFCB),   /* wJoyIgnore - masks ignored buttons */
+           mem_read8(gb, 0xD625),   /* wCurMapScript - current map script # */
+           mem_read8(gb, 0xD367),   /* wCurMapTileset */
+           mem_read8(gb, 0xD736));  /* wFlags_D736 (bit 6=standing on door/warp) */
     /* Map connection/state */
     printf("wLastMap=%02X wDestMap=%02X wGameProgressFlags=%02X\n",
            mem_read8(gb, 0xD365),   /* wLastMap */
            mem_read8(gb, 0xFF8B),   /* hFF8B (temp) */
            mem_read8(gb, 0xD747));  /* wFlags_D747 */
+    /* Joypad HRAM state - critical for input debugging */
+    printf("hJoyInput=%02X hDisableJoypadPolling=%02X\n",
+           mem_read8(gb, 0xFFF8),   /* hJoyInput (raw from ReadJoypad) */
+           mem_read8(gb, 0xFFF9));  /* hDisableJoypadPolling (non-zero = skip ReadJoypad) */
+    printf("hJoyLast=%02X hJoyReleased=%02X hJoyPressed=%02X hJoyHeld=%02X\n",
+           mem_read8(gb, 0xFFB1),   /* Previous frame buttons (bank 3 processing) */
+           mem_read8(gb, 0xFFB2),   /* Released buttons */
+           mem_read8(gb, 0xFFB3),   /* Newly pressed buttons */
+           mem_read8(gb, 0xFFB4));  /* Currently held buttons */
+    printf("P1_select=%02X directions=%02X buttons=%02X joypad_read=%02X\n",
+           gb->joypad->p1_select,
+           gb->joypad->directions,
+           gb->joypad->buttons,
+           joypad_read(gb->joypad));
 }
 
 /* Frame callback - called from hal_sync when PPU produces a frame */
@@ -240,12 +261,27 @@ static void process_auto_inputs(gb_state_t *gb, frame_ctx_t *ctx) {
     }
 }
 
+/* Debug dispatch logging (referenced by generated dispatch.c) */
+int dispatch_debug_enabled = 0;
+
 static void on_frame(gb_state_t *gb, void *userdata) {
     frame_ctx_t *ctx = (frame_ctx_t *)userdata;
     ctx->frame_count++;
 
     /* Process automated inputs (press/release at scheduled frames) */
     process_auto_inputs(gb, ctx);
+
+    /* Watch wd730 for corruption - log when it changes to unexpected values */
+    {
+        static uint8_t prev_wd730 = 0;
+        uint8_t cur_wd730 = mem_read8(gb, 0xD730);
+        if (cur_wd730 != prev_wd730 && ctx->frame_count >= 8000) {
+            fprintf(stderr, "WATCH wd730: %02X -> %02X at frame %d (bank=%02X)\n",
+                    prev_wd730, cur_wd730, ctx->frame_count,
+                    mem_read8(gb, 0xFFB8));
+        }
+        prev_wd730 = cur_wd730;
+    }
 
     /* Auto-dump scheduled frames */
     if (is_dump_frame(ctx)) {

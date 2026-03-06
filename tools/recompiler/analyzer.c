@@ -1269,6 +1269,32 @@ void analysis_run(analysis_ctx_t *ctx)
             { 0x16, 0x544C },  /* sprite/NPC handler - 150x+ per frame */
             { 0x06, 0x4F4B },  /* Oak walk-back handler - 709x */
             { 0x00, 0x24D7 },  /* bank 0 jump target - 3x */
+            /* TextBoxBorder and helpers - Predef 0x2D target, needed for text display */
+            { 0x01, 0x5AB0 },  /* TextBoxBorder - draws bordered text box */
+            { 0x01, 0x5AE0 },  /* TextBoxBorder fill helper */
+            { 0x01, 0x5AE6 },  /* TextBoxBorder specific box drawer */
+            /* Oak grass script / map transition dispatch targets */
+            { 0x03, 0x43FF },  /* Bank 3 helper (called during Oak script) */
+            { 0x06, 0x4C10 },  /* Bank 6 map/script function */
+            { 0x11, 0x4C10 },  /* Bank 17 map/script function */
+            { 0x12, 0x4152 },  /* Bank 18 critical function (called many times) */
+            { 0x12, 0x4C10 },  /* Bank 18 map/script function */
+            { 0x12, 0x4CD7 },  /* Bank 18 function */
+            { 0x12, 0x5269 },  /* Bank 18 function */
+            { 0x14, 0x4C10 },  /* Bank 20 map/script function */
+            { 0x15, 0x4C10 },  /* Bank 21 map/script function */
+            { 0x16, 0x5336 },  /* Bank 22 function */
+            /* Bank 0 jump targets reached from bank 18 during Oak script */
+            { 0x00, 0x04A0 },  /* Bank 0 function called during map scripts */
+            { 0x00, 0x3600 },  /* Bank 0 function called during map scripts */
+            /* Oak script iteration 2 - more missing targets */
+            { 0x03, 0x442A },  /* Bank 3 helper */
+            { 0x03, 0x443A },  /* Bank 3 helper */
+            { 0x16, 0x53C5 },  /* Bank 22 script function */
+            { 0x16, 0x5410 },  /* Bank 22 script function */
+            { 0x16, 0x55F3 },  /* Bank 22 script function */
+            { 0x00, 0x1154 },  /* Bank 0 jump target from bank 22 */
+            { 0x00, 0x3219 },  /* Bank 0 jump target from bank 22 */
         };
         int manual_count = sizeof(manual_seeds) / sizeof(manual_seeds[0]);
         for (int i = 0; i < manual_count; i++) {
