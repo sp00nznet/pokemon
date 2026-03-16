@@ -80,6 +80,10 @@ typedef struct {
 /* Initialize analysis context */
 void analysis_init(analysis_ctx_t *ctx, const uint8_t *rom, size_t rom_size, int num_banks);
 
+/* Load trace file and add entry points as function seeds.
+ * Trace format: one "bank:addr" pair per line (hex). */
+void analysis_load_trace(analysis_ctx_t *ctx, const char *trace_file);
+
 /* Run recursive descent analysis starting from known entry points */
 void analysis_run(analysis_ctx_t *ctx);
 

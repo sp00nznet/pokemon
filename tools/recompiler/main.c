@@ -137,6 +137,7 @@ static void print_usage(const char *prog) {
     printf("  -n <count>          Max instructions to disassemble (with -d)\n");
     printf("  -o <dir>            Output directory for generated C files\n");
     printf("  -g <name>           Game name (red, blue, yellow)\n");
+    printf("  --use-trace <file>  Load trace file for additional entry points\n");
     printf("  --debug             Include debug comments in generated code\n");
     printf("  -h, --help          Show this help\n");
 }
@@ -145,6 +146,7 @@ int main(int argc, char *argv[]) {
     const char *rom_path = NULL;
     const char *output_dir = NULL;
     const char *game_name = NULL;
+    const char *trace_file = NULL;
     int disasm_only = 0;
     int disasm_bank = -1;
     int disasm_max = 0;
@@ -165,6 +167,8 @@ int main(int argc, char *argv[]) {
             output_dir = argv[++i];
         } else if (strcmp(argv[i], "-g") == 0 && i + 1 < argc) {
             game_name = argv[++i];
+        } else if (strcmp(argv[i], "--use-trace") == 0 && i + 1 < argc) {
+            trace_file = argv[++i];
         } else if (strcmp(argv[i], "--debug") == 0) {
             debug_comments = 1;
         } else if (argv[i][0] != '-') {
@@ -237,6 +241,9 @@ int main(int argc, char *argv[]) {
     printf("=== Phase 1: Control Flow Analysis ===\n");
     analysis_ctx_t analysis;
     analysis_init(&analysis, rom, rom_size, num_banks);
+    if (trace_file) {
+        analysis_load_trace(&analysis, trace_file);
+    }
     analysis_run(&analysis);
     analysis_print_summary(&analysis);
 

@@ -927,6 +927,63 @@ void analysis_init(analysis_ctx_t *ctx, const uint8_t *rom, size_t rom_size,
     ctx->xbank_call_count = 0;
 }
 
+void analysis_load_trace(analysis_ctx_t *ctx, const char *trace_file) {
+    FILE *f = fopen(trace_file, "r");
+    if (!f) {
+        fprintf(stderr, "Warning: Cannot open trace file: %s\n", trace_file);
+        return;
+    }
+
+    int count = 0;
+    int seeded = 0;
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        /* Skip comments and blank lines */
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r')
+            continue;
+
+        /* Parse "bank:addr" format (both hex) */
+        int bank;
+        unsigned int addr;
+        if (sscanf(line, "%d:%x", &bank, &addr) != 2)
+            continue;
+        count++;
+
+        /* Filter: only accept function-aligned addresses in ROM space */
+        if (bank < 0 || bank >= ctx->num_banks)
+            continue;
+        if (bank == 0 && addr >= 0x4000)
+            continue;
+        if (bank > 0 && (addr < 0x4000 || addr >= 0x8000))
+            continue;
+
+        /* Only seed addresses that look like instruction boundaries.
+         * Simple heuristic: check if the byte at addr is a valid first opcode. */
+        size_t rom_off = (size_t)bank * BANK_SIZE + (addr - (bank == 0 ? 0 : 0x4000));
+        if (rom_off >= ctx->rom_size)
+            continue;
+        uint8_t opcode = ctx->rom_data[rom_off];
+        /* Skip if it's a data byte (0xFD, 0xDB, 0xDD, 0xE3, 0xE4, 0xF4, 0xFC are illegal) */
+        if (opcode == 0xD3 || opcode == 0xDB || opcode == 0xDD ||
+            opcode == 0xE3 || opcode == 0xE4 || opcode == 0xEB ||
+            opcode == 0xEC || opcode == 0xED || opcode == 0xF4 ||
+            opcode == 0xFC || opcode == 0xFD)
+            continue;
+
+        bank_analysis_t *ba = &ctx->banks[bank];
+        if (ba->function_count < MAX_FUNCTIONS_PER_BANK &&
+            !find_function(ba, (uint16_t)addr)) {
+            add_function(ba, (uint16_t)addr, (uint8_t)bank, false);
+            record_xbank_call(ctx, (uint16_t)addr, (uint8_t)bank);
+            seeded++;
+        }
+    }
+
+    fclose(f);
+    printf("Loaded %d trace entries, seeded %d new function entries from %s\n",
+           count, seeded, trace_file);
+}
+
 void analysis_run_bank(analysis_ctx_t *ctx, int bank)
 {
     if (bank < 0 || bank >= ctx->num_banks)

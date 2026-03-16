@@ -1,14 +1,22 @@
-# Pokemon Red - Static Recompilation
+# Pokemon Static Recompilation
 
 > *What if we just... turned the whole ROM into C and ran it natively?*
 
-A static recompiler that translates the Pokemon Red Game Boy ROM (SM83 CPU) into native C code, then runs it with a hardware abstraction layer and SDL2 frontend. No interpreter loop. No JIT. Just 64 banks of generated C functions that think they're running on a Game Boy.
+A static recompiler that translates Pokemon Game Boy ROMs (SM83 CPU) into native C code, then runs them with [gb-recompiled](https://github.com/sp00nznet/gb-recompiled)'s runtime — complete with ImGui debug GUI, asset viewer, interpreter fallback, and CGB color support. No interpreter loop. No JIT. Just 64 banks of generated C functions that think they're running on a Game Boy.
+
+## Supported Games
+
+| Game | ROM Type | Color | Status |
+|------|----------|-------|--------|
+| **Pokemon Red** | DMG / MBC3 | Monochrome | Intro through overworld |
+| **Pokemon Blue** | DMG / MBC3 | Monochrome | Should work (same engine) |
+| **Pokemon Yellow** | GBC / MBC5 | Full CGB Color | Boots and renders with color palettes |
 
 ## The Idea
 
-The Game Boy CPU (Sharp SM83) has a finite ROM. Every instruction has a fixed address. So instead of emulating one opcode at a time, we can analyze the entire ROM ahead of time, discover every function and basic block, and generate equivalent C code. At runtime, the generated code calls through a HAL that provides the memory bus, PPU, APU, timers, and everything else the game expects to find.
+The Game Boy CPU (Sharp SM83) has a finite ROM. Every instruction has a fixed address. So instead of emulating one opcode at a time, we analyze the entire ROM ahead of time, discover every function and basic block, and generate equivalent C code. At runtime, the generated code calls through gb-recompiled's battle-tested runtime that provides the memory bus, PPU, APU, timers, and everything else the game expects.
 
-It's like a whole-program decompilation, except the "decompiler" is a robot that doesn't understand what the code *does* -- it just faithfully translates what it *is*.
+Unknown code paths automatically fall back to a real SM83 interpreter — no more silent dispatch failures.
 
 ### Recompiler Pipeline
 
@@ -16,13 +24,14 @@ It's like a whole-program decompilation, except the "decompiler" is a robot that
 ROM binary --> Decoder (SM83 instructions)
            --> Analyzer (functions, basic blocks, control flow graph)
            --> Codegen (C source per bank + dispatch table)
+           --> gb-recompiled runtime (SDL2 + ImGui + interpreter fallback)
 ```
 
-Each ROM function becomes a C function (`func_b01_42B7`). Branches become `goto`. Calls become C calls. Hardware ops go through the HAL. Interrupts are checked cooperatively at basic block boundaries and HALT instructions.
+Each ROM function becomes a C function (`func_b01_42B7`). Branches become `goto`. Calls become C calls. Hardware ops go through gbrt. Interrupts are checked cooperatively at basic block boundaries and HALT instructions.
 
 ## How Far Does It Get?
 
-**Pretty far.** The full intro sequence plays with graphics, the title screen works, and you can get into the overworld and start playing:
+**Pretty far.** The full intro sequence plays with graphics, the title screen works, and you can get into the overworld:
 
 | Copyright | Game Freak Intro | Title Sequence |
 |:---:|:---:|:---:|
@@ -32,9 +41,9 @@ Each ROM function becomes a C function (`func_b01_42B7`). Branches become `goto`
 |:---:|:---:|:---:|
 | ![Menu](screenshots/04_mainmenu.png) | ![Nidorino](screenshots/05_nidorino.png) | ![Oak](screenshots/06_oak_intro.png) |
 
-**Current progression:** Copyright -> Game Freak -> Nidorino battle -> cycling Pokemon -> title screen -> main menu -> NEW GAME -> Oak's intro -> name entry -> overworld (Pallet Town) -> Oak's Route 1 script (in progress)
+**Current progression (Red):** Copyright -> Game Freak -> Nidorino battle -> cycling Pokemon -> title screen -> main menu -> NEW GAME -> Oak's intro -> name entry -> overworld (Pallet Town) -> Oak's Route 1 script (in progress)
 
-Zero dispatch errors. Zero stub fallbacks. The generated code handles it all.
+**Current progression (Yellow):** Boots into CGB mode, runs init sequence, renders with color palettes. Title screen in progress.
 
 ## Building
 
@@ -42,121 +51,135 @@ Zero dispatch errors. Zero stub fallbacks. The generated code handles it all.
 - CMake 3.16+
 - MSVC 2022 (Windows) or GCC/Clang
 - SDL2 (via vcpkg recommended)
-- A Pokemon Red ROM file (`roms/Pokemon Red Version.gb`) -- you supply your own
+- Python 3.11+ with PyBoy (`pip install pyboy`) for ground truth traces
+- A Pokemon ROM file -- you supply your own
 
 ### Steps
 
 ```bash
+# Clone with submodule
+git clone --recursive https://github.com/sp00nznet/pokemon.git
+cd pokemon
+
+# If imgui submodule is empty:
+git clone https://github.com/ocornut/imgui.git gbrecomp/runtime/third_party/imgui
+git -C gbrecomp/runtime/third_party/imgui checkout 277ae93c41
+
 # Configure
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
 # Build the recompiler
 cmake --build build --target recompiler --config Release
 
-# Feed it the ROM (generates ~64 C files + dispatch table)
+# Recompile a ROM (generates ~64 C files + dispatch table)
 ./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Red Version.gb" -o src/generated
+# or for Yellow:
+./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" -o src/generated
 
-# Reconfigure (picks up the freshly generated source files)
+# Reconfigure (picks up generated files)
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 
 # Build the game
-cmake --build build --target pokemon_red --config Release
+cmake --build build --target pokemon_red --config Release   # or pokemon_yellow
 
 # Play
-./build/Release/pokemon_red.exe "roms/Pokemon Red Version.gb"
+./build/Release/pokemon_red.exe
 ```
 
-## Controls
+### Trace-Guided Recompilation
 
-| Key | Action |
-|-----|--------|
-| **Z** | A button |
-| **X** | B button |
-| **Enter** | START |
-| **Backspace** | SELECT |
-| **Arrow keys** | D-Pad |
-| **Tab** (hold) | Fast-forward (skip frame limiter) |
-| **F5** | Save state |
-| **F9** | Load state |
-| **F11** | Toggle fullscreen |
-| **F12** | Screenshot |
-| **M** | Toggle mute |
-
-There's also a **Windows menu bar** (File -> Save/Load State, Config -> Scale 1x-4x) for people who prefer clicking things.
-
-### Automated Testing
+The recompiler supports `--use-trace` to seed function discovery with PyBoy execution traces:
 
 ```bash
-# Press Start at frame 420, A at frame 620, stop at frame 1200
-./build/Release/pokemon_red.exe "roms/Pokemon Red Version.gb" \
-    --auto-input 420:start 620:a --stop-at 1200 --dump-frames 900,1200
+# Capture ground truth from PyBoy (dense trace with call targets)
+python tools/pyboy_dense_trace.py "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" \
+    -o pokemon_yellow_dense.trace --frames 9000
+
+# Filter to call/jump targets only
+python -c "..." > pokemon_yellow_filtered.trace
+
+# Recompile with trace seeds
+./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" \
+    -o src/generated --use-trace pokemon_yellow_filtered.trace
 ```
 
-## What's Working
+## Debugging Infrastructure
 
-**The big stuff:**
-- Full ROM analysis and C code generation for all 64 banks
-- Complete hardware abstraction: CPU state, memory/MBC3, PPU, APU, timer, joypad, DMA, serial, interrupts
-- SDL2 window with pixel-accurate rendering, audio output, and native Win32 menu bar
-- Game progression from boot through intro, title, menus, and into the overworld
-- Sprite decompression and VBlank-synchronized VRAM transfers
-- All 4 audio channels (2x pulse, wave, noise) with proper DAC, envelopes, and Bresenham sample timing
-- Save states and SRAM persistence
+### Hardware Trace Comparison
 
-**The tricky stuff we had to figure out:**
-- **Non-local returns (POP trick):** Pokemon Red's sprite decompressor manipulates the stack to return to a different caller. We detect these automatically with a table-driven NLR system in codegen.
-- **OAM DMA source address:** The DMA routine copies its source address into HRAM at runtime. We had to read it from HRAM, not the DMA register. Sprites were invisible for a *while*.
-- **Instruction boundary tracking:** The analyzer now maintains an `is_inst_start[]` bitmap so we never accidentally split a multi-byte instruction across basic blocks. This fixed a `CALL DelayFrame` that was hiding inside a 3-byte instruction's operand bytes.
-- **STAT interrupt edge detection:** Without tracking the previous STAT line, interrupts fired every cycle instead of once per transition. The LCD went haywire.
-- **Frame timing:** `SDL_Delay(16)` isn't 59.73 fps. We use performance counters with spin-wait for the sub-millisecond remainder. The game notices if you drift.
+Compare recompiled output against PyBoy frame-by-frame:
 
-## Project Structure
+```bash
+# Capture PyBoy ground truth
+python tools/pyboy_hwtrace.py "roms/Pokemon Red Version.gb" -o pyboy_trace.log --frames 1000
 
-```
-tools/recompiler/       SM83-to-C static recompiler
-  decoder.c               Instruction decoder (all SM83 opcodes + CB prefix)
-  analyzer.c              Function/block discovery, control flow, dispatch seeds
-  codegen.c               C code generation, NLR detection, dispatch table
-  symbols.c               Symbol table management
-  main.c                  Entry point
+# Run recompiled game with hwtrace
+./build/Release/pokemon_red.exe --hwtrace recomp_trace.log --stop-at 1000
 
-src/hal/                Game Boy hardware abstraction layer
-  cpu.c/h                 CPU state, register file, interrupts, HALT
-  memory.c/h              Memory bus, MBC3 banking, I/O registers
-  ppu.c/h                 Pixel Processing Unit (scanline renderer)
-  apu.c/h                 Audio Processing Unit (4 channels, high-pass filter)
-  timer.c/h               Timer/divider with glitch emulation
-  interrupts.c/h          Interrupt dispatch and edge detection
-  joypad.c/h              Input with action/direction multiplexing
-  dma.c/h                 OAM DMA transfers
-  serial.c/h              Serial link cable (stub -- no link partner)
-
-src/platform/           SDL2 platform layer
-  window.c/h              Window management and scaling
-  renderer.c/h            Pixel rendering with palette support
-  audio.c/h               Audio output (thread-safe ring buffer)
-  input.c/h               Keyboard input and fast-forward
-  menu.c/h                Native Win32 menu bar (File, Config)
-
-src/generated/          Auto-generated from ROM (mostly gitignored)
-  banks/                  Per-bank C files (one per ROM bank, gitignored)
-  dispatch.c/h            Function dispatch table (gitignored)
-  stubs.c                 Hand-written stubs for edge cases (committed)
+# Compare (71-frame offset for boot ROM)
+python tools/compare_traces.py pyboy_trace.log recomp_trace.log --offset 71
 ```
 
-## What's Next
+### CLI Flags
 
-- Oak's Route 1 script and wild Pokemon battles
-- More dispatch seeds as new code paths are discovered
-- Visual accuracy refinements
-- Maybe Pokemon Blue and Yellow support (the infrastructure is there, the seeds aren't)
+| Flag | Description |
+|------|-------------|
+| `--stop-at N` | Auto-exit after N frames |
+| `--auto-input "F:btn:dur"` | Automated button presses |
+| `--hwtrace file` | Per-frame hardware state CRCs |
+| `--trace-entries file` | Log dispatch entry points |
+| `--wram-dump N` | Binary WRAM dump at frame N |
+| `--dump-frames "N,M"` | Screenshot specific frames |
+| `--debug-dispatch` | Log every dispatch call |
+| `--watch 0xD730` | Memory watchpoint |
+
+## Architecture
+
+### Runtime: gb-recompiled
+
+The game links against [gb-recompiled](https://github.com/sp00nznet/gb-recompiled)'s `gbrt` library which provides:
+
+- **Full GB/CGB hardware emulation** (PPU, APU, timer, MBC1/3/5, DMA, serial)
+- **SM83 interpreter** for fallback execution of undiscovered code
+- **SDL2 + ImGui frontend** with asset viewer (tiles, sprites, tilemaps, palettes)
+- **Save states and battery RAM persistence**
+- **Hardware trace output** in SameBoy-compatible format
+
+### Pokemon-Specific Bridge
+
+| File | Purpose |
+|------|---------|
+| `src/pokemon_rt.h` | Sync, HALT, interrupt helpers for generated code |
+| `src/pokemon_debug.c/h` | Dispatch trace ring buffer, memory watchpoints |
+| `src/generated/stubs.c` | Game-specific stubs (Bankswitch, Predef, CallFunctionInTable) |
+
+### Recompiler
+
+```
+tools/recompiler/
+  decoder.c         SM83 instruction decoder (all opcodes + CB prefix)
+  analyzer.c        Function/block discovery, trace loading, dispatch seeds
+  codegen.c         C code generation targeting GBContext API
+  symbols.c         Symbol table (entry points, predef tables, farcall patterns)
+  main.c            CLI with --use-trace support
+```
+
+## Key Technical Details
+
+- **Register pairs use C unions:** `ctx->hl` for 16-bit, `ctx->h`/`ctx->l` for 8-bit
+- **Flags unpacked for performance:** `ctx->f_z`, `ctx->f_n`, `ctx->f_h`, `ctx->f_c`
+- **Inline ALU:** Addition/subtraction/logic emitted inline (no function call overhead)
+- **Cooperative interrupts:** Checked at basic block boundaries via `pokemon_sync(ctx)`
+- **Interpreter fallback:** Unknown dispatch targets use `gb_interpret(ctx, addr)` instead of crashing
+- **Game-aware stubs:** Bankswitch/Predef/CallFunctionInTable at Red-specific (0x35D6/0x3E6D/0x3D97) and Yellow-specific (0x3E84/0x3EB4/0x3D93) addresses
+- **Auto-detected entry point:** ROM header's JP target (Red: 0x0150, Yellow: 0x01AB)
 
 ## ROM Files
 
 Place ROM files in `roms/` (gitignored):
-- `Pokemon Red Version.gb` -- Primary target, actively tested
-- `Pokemon Blue Version.gb` -- Should work (same engine), untested
-- `Pokemon Yellow Version - Special Pikachu Edition.gbc` -- MBC5, untested
+- `Pokemon Red Version.gb`
+- `Pokemon Blue Version.gb`
+- `Pokemon Yellow Version - Special Pikachu Edition.gbc`
 
 ## License
 

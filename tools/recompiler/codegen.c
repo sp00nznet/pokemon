@@ -48,22 +48,22 @@ static const char *operand_read8(char *buf, size_t bufsz,
                                  sm83_operand_t op,
                                  uint8_t imm8, uint16_t imm16) {
     switch (op) {
-    case OPERAND_A:         snprintf(buf, bufsz, "gb->a"); break;
-    case OPERAND_B:         snprintf(buf, bufsz, "gb->b"); break;
-    case OPERAND_C:         snprintf(buf, bufsz, "gb->c"); break;
-    case OPERAND_D:         snprintf(buf, bufsz, "gb->d"); break;
-    case OPERAND_E:         snprintf(buf, bufsz, "gb->e"); break;
-    case OPERAND_H:         snprintf(buf, bufsz, "gb->h"); break;
-    case OPERAND_L:         snprintf(buf, bufsz, "gb->l"); break;
+    case OPERAND_A:         snprintf(buf, bufsz, "ctx->a"); break;
+    case OPERAND_B:         snprintf(buf, bufsz, "ctx->b"); break;
+    case OPERAND_C:         snprintf(buf, bufsz, "ctx->c"); break;
+    case OPERAND_D:         snprintf(buf, bufsz, "ctx->d"); break;
+    case OPERAND_E:         snprintf(buf, bufsz, "ctx->e"); break;
+    case OPERAND_H:         snprintf(buf, bufsz, "ctx->h"); break;
+    case OPERAND_L:         snprintf(buf, bufsz, "ctx->l"); break;
     case OPERAND_IMM8:      snprintf(buf, bufsz, "0x%02X", imm8); break;
-    case OPERAND_IND_BC:    snprintf(buf, bufsz, "mem_read8(gb, REG_BC(gb))"); break;
-    case OPERAND_IND_DE:    snprintf(buf, bufsz, "mem_read8(gb, REG_DE(gb))"); break;
-    case OPERAND_IND_HL:    snprintf(buf, bufsz, "mem_read8(gb, REG_HL(gb))"); break;
-    case OPERAND_IND_HLI:   snprintf(buf, bufsz, "mem_read8(gb, REG_HL(gb))"); break;
-    case OPERAND_IND_HLD:   snprintf(buf, bufsz, "mem_read8(gb, REG_HL(gb))"); break;
-    case OPERAND_IND_C:     snprintf(buf, bufsz, "mem_read8(gb, 0xFF00 + gb->c)"); break;
-    case OPERAND_IND_IMM8:  snprintf(buf, bufsz, "mem_read8(gb, 0xFF00 + 0x%02X)", imm8); break;
-    case OPERAND_IND_IMM16: snprintf(buf, bufsz, "mem_read8(gb, 0x%04X)", imm16); break;
+    case OPERAND_IND_BC:    snprintf(buf, bufsz, "gb_read8(ctx, ctx->bc)"); break;
+    case OPERAND_IND_DE:    snprintf(buf, bufsz, "gb_read8(ctx, ctx->de)"); break;
+    case OPERAND_IND_HL:    snprintf(buf, bufsz, "gb_read8(ctx, ctx->hl)"); break;
+    case OPERAND_IND_HLI:   snprintf(buf, bufsz, "gb_read8(ctx, ctx->hl)"); break;
+    case OPERAND_IND_HLD:   snprintf(buf, bufsz, "gb_read8(ctx, ctx->hl)"); break;
+    case OPERAND_IND_C:     snprintf(buf, bufsz, "gb_read8(ctx, 0xFF00 + ctx->c)"); break;
+    case OPERAND_IND_IMM8:  snprintf(buf, bufsz, "gb_read8(ctx, 0xFF00 + 0x%02X)", imm8); break;
+    case OPERAND_IND_IMM16: snprintf(buf, bufsz, "gb_read8(ctx, 0x%04X)", imm16); break;
     default:                snprintf(buf, bufsz, "0 /* unknown operand */"); break;
     }
     return buf;
@@ -81,39 +81,39 @@ static void operand_write8(FILE *f, int indent,
 
     switch (op) {
     case OPERAND_A:
-        fprintf(f, "%sgb->a = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->a = %s;\n", ws, val_expr); break;
     case OPERAND_B:
-        fprintf(f, "%sgb->b = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->b = %s;\n", ws, val_expr); break;
     case OPERAND_C:
-        fprintf(f, "%sgb->c = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->c = %s;\n", ws, val_expr); break;
     case OPERAND_D:
-        fprintf(f, "%sgb->d = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->d = %s;\n", ws, val_expr); break;
     case OPERAND_E:
-        fprintf(f, "%sgb->e = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->e = %s;\n", ws, val_expr); break;
     case OPERAND_H:
-        fprintf(f, "%sgb->h = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->h = %s;\n", ws, val_expr); break;
     case OPERAND_L:
-        fprintf(f, "%sgb->l = %s;\n", ws, val_expr); break;
+        fprintf(f, "%sctx->l = %s;\n", ws, val_expr); break;
     case OPERAND_IND_BC:
-        fprintf(f, "%smem_write8(gb, REG_BC(gb), %s);\n", ws, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, ctx->bc, %s);\n", ws, val_expr); break;
     case OPERAND_IND_DE:
-        fprintf(f, "%smem_write8(gb, REG_DE(gb), %s);\n", ws, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, ctx->de, %s);\n", ws, val_expr); break;
     case OPERAND_IND_HL:
-        fprintf(f, "%smem_write8(gb, REG_HL(gb), %s);\n", ws, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, ctx->hl, %s);\n", ws, val_expr); break;
     case OPERAND_IND_HLI:
-        fprintf(f, "%smem_write8(gb, REG_HL(gb), %s);\n", ws, val_expr);
-        fprintf(f, "%s{ uint16_t hl = REG_HL(gb) + 1; gb->h = hl >> 8; gb->l = hl & 0xFF; }\n", ws);
+        fprintf(f, "%sgb_write8(ctx, ctx->hl, %s);\n", ws, val_expr);
+        fprintf(f, "%sctx->hl++;\n", ws);
         break;
     case OPERAND_IND_HLD:
-        fprintf(f, "%smem_write8(gb, REG_HL(gb), %s);\n", ws, val_expr);
-        fprintf(f, "%s{ uint16_t hl = REG_HL(gb) - 1; gb->h = hl >> 8; gb->l = hl & 0xFF; }\n", ws);
+        fprintf(f, "%sgb_write8(ctx, ctx->hl, %s);\n", ws, val_expr);
+        fprintf(f, "%sctx->hl--;\n", ws);
         break;
     case OPERAND_IND_C:
-        fprintf(f, "%smem_write8(gb, 0xFF00 + gb->c, %s);\n", ws, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, 0xFF00 + ctx->c, %s);\n", ws, val_expr); break;
     case OPERAND_IND_IMM8:
-        fprintf(f, "%smem_write8(gb, 0xFF00 + 0x%02X, %s);\n", ws, imm8, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, 0xFF00 + 0x%02X, %s);\n", ws, imm8, val_expr); break;
     case OPERAND_IND_IMM16:
-        fprintf(f, "%smem_write8(gb, 0x%04X, %s);\n", ws, imm16, val_expr); break;
+        fprintf(f, "%sgb_write8(ctx, 0x%04X, %s);\n", ws, imm16, val_expr); break;
     default:
         fprintf(f, "%s/* unknown write target */\n", ws); break;
     }
@@ -128,11 +128,11 @@ static bool is_reg16(sm83_operand_t op) {
 /* Return C expression for reading a 16-bit register value */
 static const char *reg16_read(char *buf, size_t bufsz, sm83_operand_t op, uint16_t imm16) {
     switch (op) {
-    case OPERAND_BC:    snprintf(buf, bufsz, "REG_BC(gb)"); break;
-    case OPERAND_DE:    snprintf(buf, bufsz, "REG_DE(gb)"); break;
-    case OPERAND_HL:    snprintf(buf, bufsz, "REG_HL(gb)"); break;
-    case OPERAND_SP:    snprintf(buf, bufsz, "gb->sp"); break;
-    case OPERAND_AF:    snprintf(buf, bufsz, "REG_AF(gb)"); break;
+    case OPERAND_BC:    snprintf(buf, bufsz, "ctx->bc"); break;
+    case OPERAND_DE:    snprintf(buf, bufsz, "ctx->de"); break;
+    case OPERAND_HL:    snprintf(buf, bufsz, "ctx->hl"); break;
+    case OPERAND_SP:    snprintf(buf, bufsz, "ctx->sp"); break;
+    case OPERAND_AF:    snprintf(buf, bufsz, "(gb_pack_flags(ctx), ctx->af)"); break;
     case OPERAND_IMM16: snprintf(buf, bufsz, "0x%04X", imm16); break;
     default:            snprintf(buf, bufsz, "0 /* unknown reg16 */"); break;
     }
@@ -147,21 +147,19 @@ static void reg16_write(FILE *f, int indent, sm83_operand_t op, const char *val_
 
     switch (op) {
     case OPERAND_BC:
-        fprintf(f, "%s{ uint16_t _v = %s; gb->b = _v >> 8; gb->c = _v & 0xFF; }\n", ws, val_expr);
+        fprintf(f, "%sctx->bc = %s;\n", ws, val_expr);
         break;
     case OPERAND_DE:
-        fprintf(f, "%s{ uint16_t _v = %s; gb->d = _v >> 8; gb->e = _v & 0xFF; }\n", ws, val_expr);
+        fprintf(f, "%sctx->de = %s;\n", ws, val_expr);
         break;
     case OPERAND_HL:
-        fprintf(f, "%s{ uint16_t _v = %s; gb->h = _v >> 8; gb->l = _v & 0xFF; }\n", ws, val_expr);
+        fprintf(f, "%sctx->hl = %s;\n", ws, val_expr);
         break;
     case OPERAND_SP:
-        fprintf(f, "%sgb->sp = %s;\n", ws, val_expr);
+        fprintf(f, "%sctx->sp = %s;\n", ws, val_expr);
         break;
     case OPERAND_AF:
-        fprintf(f, "%s{ uint16_t _v = %s; gb->a = _v >> 8; "
-                "gb->f_z = (_v >> 7) & 1; gb->f_n = (_v >> 6) & 1; "
-                "gb->f_h = (_v >> 5) & 1; gb->f_c = (_v >> 4) & 1; }\n",
+        fprintf(f, "%s{ uint16_t _v = %s; ctx->af = _v & 0xFFF0; gb_unpack_flags(ctx); }\n",
                 ws, val_expr);
         break;
     default:
@@ -173,10 +171,10 @@ static void reg16_write(FILE *f, int indent, sm83_operand_t op, const char *val_
 /* Return the condition expression for a conditional operand */
 static const char *cond_expr(sm83_operand_t op) {
     switch (op) {
-    case OPERAND_COND_NZ: return "!gb->f_z";
-    case OPERAND_COND_Z:  return "gb->f_z";
-    case OPERAND_COND_NC: return "!gb->f_c";
-    case OPERAND_COND_C:  return "gb->f_c";
+    case OPERAND_COND_NZ: return "!ctx->f_z";
+    case OPERAND_COND_Z:  return "ctx->f_z";
+    case OPERAND_COND_NC: return "!ctx->f_c";
+    case OPERAND_COND_C:  return "ctx->f_c";
     default:              return "1";
     }
 }
@@ -245,7 +243,7 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     fprintf(f, "%s/* %04X: %s */\n", ws, addr, disasm);
 
     /* Emit cycle count */
-    fprintf(f, "%sgb->cycles += %d;\n", ws, inst->cycles);
+    fprintf(f, "%sgb_add_cycles(ctx, %d);\n", ws, inst->cycles);
 
     switch (inst->mnemonic) {
 
@@ -256,20 +254,20 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
 
     /* ----- STOP ----- */
     case OP_STOP:
-        fprintf(f, "%shal_stop(gb);\n", ws);
+        fprintf(f, "%sgb_stop(ctx);\n", ws);
         break;
 
     /* ----- HALT ----- */
     case OP_HALT:
-        fprintf(f, "%shal_halt(gb);\n", ws);
+        fprintf(f, "%spokemon_halt(ctx);\n", ws);
         break;
 
     /* ----- DI / EI ----- */
     case OP_DI:
-        fprintf(f, "%sgb->ime = 0;\n", ws);
+        fprintf(f, "%sctx->ime = 0;\n", ws);
         break;
     case OP_EI:
-        fprintf(f, "%sgb->ime_pending = 1;\n", ws);
+        fprintf(f, "%sctx->ime_pending = 1;\n", ws);
         break;
 
     /* ----- LD ----- */
@@ -282,19 +280,19 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         }
         /* LD (a16), SP -- 16-bit store */
         else if (inst->op1 == OPERAND_IND_IMM16 && inst->op2 == OPERAND_SP) {
-            fprintf(f, "%smem_write8(gb, 0x%04X, gb->sp & 0xFF);\n", ws, imm16);
-            fprintf(f, "%smem_write8(gb, 0x%04X, gb->sp >> 8);\n", ws, (uint16_t)(imm16 + 1));
+            fprintf(f, "%sgb_write8(ctx, 0x%04X, ctx->sp & 0xFF);\n", ws, imm16);
+            fprintf(f, "%sgb_write8(ctx, 0x%04X, ctx->sp >> 8);\n", ws, (uint16_t)(imm16 + 1));
         }
         /* LD HL, SP+r8 */
         else if (inst->op1 == OPERAND_HL && inst->op2 == OPERAND_SP_R8) {
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    int8_t offset = (int8_t)0x%02X;\n", ws, imm8);
-            fprintf(f, "%s    uint16_t result = (uint16_t)(gb->sp + offset);\n", ws);
-            fprintf(f, "%s    gb->f_z = 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
-            fprintf(f, "%s    gb->f_h = ((gb->sp & 0xF) + (offset & 0xF)) > 0xF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_c = ((gb->sp & 0xFF) + (offset & 0xFF)) > 0xFF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->h = result >> 8; gb->l = result & 0xFF;\n", ws);
+            fprintf(f, "%s    uint16_t result = (uint16_t)(ctx->sp + offset);\n", ws);
+            fprintf(f, "%s    ctx->f_z = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_h = ((ctx->sp & 0xF) + (offset & 0xF)) > 0xF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_c = ((ctx->sp & 0xFF) + (offset & 0xFF)) > 0xFF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->hl = result;\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         /* 8-bit loads */
@@ -303,9 +301,9 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             operand_write8(f, indent, inst->op1, buf1, imm8, imm16);
             /* Handle HLI/HLD on read side too */
             if (inst->op2 == OPERAND_IND_HLI) {
-                fprintf(f, "%s{ uint16_t hl = REG_HL(gb) + 1; gb->h = hl >> 8; gb->l = hl & 0xFF; }\n", ws);
+                fprintf(f, "%sctx->hl++;\n", ws);
             } else if (inst->op2 == OPERAND_IND_HLD) {
-                fprintf(f, "%s{ uint16_t hl = REG_HL(gb) - 1; gb->h = hl >> 8; gb->l = hl & 0xFF; }\n", ws);
+                fprintf(f, "%sctx->hl--;\n", ws);
             }
         }
         break;
@@ -321,21 +319,31 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
 
     /* ----- PUSH ----- */
     case OP_PUSH: {
-        reg16_read(buf1, sizeof(buf1), inst->op1, 0);
-        fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint16_t _pv = %s;\n", ws, buf1);
-        fprintf(f, "%s    gb->sp -= 2;\n", ws);
-        fprintf(f, "%s    mem_write8(gb, gb->sp + 1, _pv >> 8);\n", ws);
-        fprintf(f, "%s    mem_write8(gb, gb->sp, _pv & 0xFF);\n", ws);
-        fprintf(f, "%s}\n", ws);
+        if (inst->op1 == OPERAND_AF) {
+            fprintf(f, "%s{\n", ws);
+            fprintf(f, "%s    gb_pack_flags(ctx);\n", ws);
+            fprintf(f, "%s    uint16_t _pv = ctx->af;\n", ws);
+            fprintf(f, "%s    ctx->sp -= 2;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->sp + 1, _pv >> 8);\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->sp, _pv & 0xFF);\n", ws);
+            fprintf(f, "%s}\n", ws);
+        } else {
+            reg16_read(buf1, sizeof(buf1), inst->op1, 0);
+            fprintf(f, "%s{\n", ws);
+            fprintf(f, "%s    uint16_t _pv = %s;\n", ws, buf1);
+            fprintf(f, "%s    ctx->sp -= 2;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->sp + 1, _pv >> 8);\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->sp, _pv & 0xFF);\n", ws);
+            fprintf(f, "%s}\n", ws);
+        }
         break;
     }
 
     /* ----- POP ----- */
     case OP_POP: {
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint16_t _pv = mem_read8(gb, gb->sp) | (mem_read8(gb, gb->sp + 1) << 8);\n", ws);
-        fprintf(f, "%s    gb->sp += 2;\n", ws);
+        fprintf(f, "%s    uint16_t _pv = gb_read8(ctx, ctx->sp) | (gb_read8(ctx, ctx->sp + 1) << 8);\n", ws);
+        fprintf(f, "%s    ctx->sp += 2;\n", ws);
         /* POP AF has special handling - low nibble of F is always 0 */
         if (inst->op1 == OPERAND_AF) {
             fprintf(f, "%s    _pv &= 0xFFF0;\n", ws);
@@ -352,24 +360,24 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         if (inst->op1 == OPERAND_SP) {
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    int8_t offset = (int8_t)0x%02X;\n", ws, imm8);
-            fprintf(f, "%s    gb->f_z = 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
-            fprintf(f, "%s    gb->f_h = ((gb->sp & 0xF) + (offset & 0xF)) > 0xF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_c = ((gb->sp & 0xFF) + (offset & 0xFF)) > 0xFF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->sp = (uint16_t)(gb->sp + offset);\n", ws);
+            fprintf(f, "%s    ctx->f_z = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_h = ((ctx->sp & 0xF) + (offset & 0xF)) > 0xF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_c = ((ctx->sp & 0xFF) + (offset & 0xFF)) > 0xFF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->sp = (uint16_t)(ctx->sp + offset);\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         /* ADD HL, rr (16-bit) */
         else if (inst->op1 == OPERAND_HL) {
             reg16_read(buf1, sizeof(buf1), inst->op2, imm16);
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint16_t hl = REG_HL(gb);\n", ws);
+            fprintf(f, "%s    uint16_t hl = ctx->hl;\n", ws);
             fprintf(f, "%s    uint16_t val = %s;\n", ws, buf1);
             fprintf(f, "%s    uint32_t result = hl + val;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
-            fprintf(f, "%s    gb->f_h = ((hl & 0xFFF) + (val & 0xFFF)) > 0xFFF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_c = result > 0xFFFF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->h = (result >> 8) & 0xFF; gb->l = result & 0xFF;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_h = ((hl & 0xFFF) + (val & 0xFFF)) > 0xFFF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_c = result > 0xFFFF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->hl = (uint16_t)(result & 0xFFFF);\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         /* ADD A, val (8-bit) */
@@ -377,12 +385,12 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    uint16_t result = gb->a + val;\n", ws);
-            fprintf(f, "%s    gb->f_h = ((gb->a & 0xF) + (val & 0xF)) > 0xF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_c = result > 0xFF ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->a = result & 0xFF;\n", ws);
-            fprintf(f, "%s    gb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
+            fprintf(f, "%s    uint16_t result = ctx->a + val;\n", ws);
+            fprintf(f, "%s    ctx->f_h = ((ctx->a & 0xF) + (val & 0xF)) > 0xF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_c = result > 0xFF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->a = result & 0xFF;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         break;
@@ -393,13 +401,13 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
         fprintf(f, "%s{\n", ws);
         fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-        fprintf(f, "%s    uint8_t carry = gb->f_c;\n", ws);
-        fprintf(f, "%s    uint16_t result = gb->a + val + carry;\n", ws);
-        fprintf(f, "%s    gb->f_h = ((gb->a & 0xF) + (val & 0xF) + carry) > 0xF ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_c = result > 0xFF ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->a = result & 0xFF;\n", ws);
-        fprintf(f, "%s    gb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_n = 0;\n", ws);
+        fprintf(f, "%s    uint8_t carry = ctx->f_c;\n", ws);
+        fprintf(f, "%s    uint16_t result = ctx->a + val + carry;\n", ws);
+        fprintf(f, "%s    ctx->f_h = ((ctx->a & 0xF) + (val & 0xF) + carry) > 0xF ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_c = result > 0xFF ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->a = result & 0xFF;\n", ws);
+        fprintf(f, "%s    ctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_n = 0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
     }
@@ -409,12 +417,12 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
         fprintf(f, "%s{\n", ws);
         fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-        fprintf(f, "%s    int16_t result = (int16_t)gb->a - (int16_t)val;\n", ws);
-        fprintf(f, "%s    gb->f_h = ((gb->a & 0xF) - (val & 0xF)) < 0 ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_c = result < 0 ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->a = (uint8_t)(result & 0xFF);\n", ws);
-        fprintf(f, "%s    gb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_n = 1;\n", ws);
+        fprintf(f, "%s    int16_t result = (int16_t)ctx->a - (int16_t)val;\n", ws);
+        fprintf(f, "%s    ctx->f_h = ((ctx->a & 0xF) - (val & 0xF)) < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_c = result < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->a = (uint8_t)(result & 0xFF);\n", ws);
+        fprintf(f, "%s    ctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_n = 1;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
     }
@@ -424,13 +432,13 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
         fprintf(f, "%s{\n", ws);
         fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-        fprintf(f, "%s    uint8_t carry = gb->f_c;\n", ws);
-        fprintf(f, "%s    int16_t result = (int16_t)gb->a - (int16_t)val - (int16_t)carry;\n", ws);
-        fprintf(f, "%s    gb->f_h = ((gb->a & 0xF) - (val & 0xF) - carry) < 0 ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_c = result < 0 ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->a = (uint8_t)(result & 0xFF);\n", ws);
-        fprintf(f, "%s    gb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_n = 1;\n", ws);
+        fprintf(f, "%s    uint8_t carry = ctx->f_c;\n", ws);
+        fprintf(f, "%s    int16_t result = (int16_t)ctx->a - (int16_t)val - (int16_t)carry;\n", ws);
+        fprintf(f, "%s    ctx->f_h = ((ctx->a & 0xF) - (val & 0xF) - carry) < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_c = result < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->a = (uint8_t)(result & 0xFF);\n", ws);
+        fprintf(f, "%s    ctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_n = 1;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
     }
@@ -438,27 +446,27 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     /* ----- AND ----- */
     case OP_AND: {
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
-        fprintf(f, "%sgb->a &= %s;\n", ws, buf1);
-        fprintf(f, "%sgb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%sgb->f_n = 0; gb->f_h = 1; gb->f_c = 0;\n", ws);
+        fprintf(f, "%sctx->a &= %s;\n", ws, buf1);
+        fprintf(f, "%sctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%sctx->f_n = 0; ctx->f_h = 1; ctx->f_c = 0;\n", ws);
         break;
     }
 
     /* ----- XOR ----- */
     case OP_XOR: {
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
-        fprintf(f, "%sgb->a ^= %s;\n", ws, buf1);
-        fprintf(f, "%sgb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%sgb->f_n = 0; gb->f_h = 0; gb->f_c = 0;\n", ws);
+        fprintf(f, "%sctx->a ^= %s;\n", ws, buf1);
+        fprintf(f, "%sctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%sctx->f_n = 0; ctx->f_h = 0; ctx->f_c = 0;\n", ws);
         break;
     }
 
     /* ----- OR ----- */
     case OP_OR: {
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
-        fprintf(f, "%sgb->a |= %s;\n", ws, buf1);
-        fprintf(f, "%sgb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%sgb->f_n = 0; gb->f_h = 0; gb->f_c = 0;\n", ws);
+        fprintf(f, "%sctx->a |= %s;\n", ws, buf1);
+        fprintf(f, "%sctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%sctx->f_n = 0; ctx->f_h = 0; ctx->f_c = 0;\n", ws);
         break;
     }
 
@@ -467,11 +475,11 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
         fprintf(f, "%s{\n", ws);
         fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-        fprintf(f, "%s    int16_t result = (int16_t)gb->a - (int16_t)val;\n", ws);
-        fprintf(f, "%s    gb->f_z = ((result & 0xFF) == 0) ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_n = 1;\n", ws);
-        fprintf(f, "%s    gb->f_h = ((gb->a & 0xF) - (val & 0xF)) < 0 ? 1 : 0;\n", ws);
-        fprintf(f, "%s    gb->f_c = result < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    int16_t result = (int16_t)ctx->a - (int16_t)val;\n", ws);
+        fprintf(f, "%s    ctx->f_z = ((result & 0xFF) == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_n = 1;\n", ws);
+        fprintf(f, "%s    ctx->f_h = ((ctx->a & 0xF) - (val & 0xF)) < 0 ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_c = result < 0 ? 1 : 0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
     }
@@ -487,26 +495,26 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         } else if (inst->op1 == OPERAND_IND_HL) {
             /* INC (HL) */
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_h = (val & 0xF) == 0xF ? 1 : 0;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_h = (val & 0xF) == 0xF ? 1 : 0;\n", ws);
             fprintf(f, "%s    val++;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             /* 8-bit register INC */
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    gb->f_h = (%s & 0xF) == 0xF ? 1 : 0;\n", ws, buf1);
+            fprintf(f, "%s    ctx->f_h = (%s & 0xF) == 0xF ? 1 : 0;\n", ws, buf1);
             /* Write incremented value */
             char inc_val[160];
             snprintf(inc_val, sizeof(inc_val), "(uint8_t)(%s + 1)", buf1);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, inc_val, imm8, imm16);
             operand_read8(buf2, sizeof(buf2), inst->op1, imm8, imm16);
-            fprintf(f, "%s    gb->f_z = (%s == 0) ? 1 : 0;\n", ws, buf2);
-            fprintf(f, "%s    gb->f_n = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (%s == 0) ? 1 : 0;\n", ws, buf2);
+            fprintf(f, "%s    ctx->f_n = 0;\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         break;
@@ -523,25 +531,25 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         } else if (inst->op1 == OPERAND_IND_HL) {
             /* DEC (HL) */
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_h = (val & 0xF) == 0x0 ? 1 : 0;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_h = (val & 0xF) == 0x0 ? 1 : 0;\n", ws);
             fprintf(f, "%s    val--;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 1;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 1;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             /* 8-bit register DEC */
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    gb->f_h = (%s & 0xF) == 0x0 ? 1 : 0;\n", ws, buf1);
+            fprintf(f, "%s    ctx->f_h = (%s & 0xF) == 0x0 ? 1 : 0;\n", ws, buf1);
             char dec_val[160];
             snprintf(dec_val, sizeof(dec_val), "(uint8_t)(%s - 1)", buf1);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, dec_val, imm8, imm16);
             operand_read8(buf2, sizeof(buf2), inst->op1, imm8, imm16);
-            fprintf(f, "%s    gb->f_z = (%s == 0) ? 1 : 0;\n", ws, buf2);
-            fprintf(f, "%s    gb->f_n = 1;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (%s == 0) ? 1 : 0;\n", ws, buf2);
+            fprintf(f, "%s    ctx->f_n = 1;\n", ws);
             fprintf(f, "%s}\n", ws);
         }
         break;
@@ -550,77 +558,77 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     /* ----- DAA (Decimal Adjust Accumulator) ----- */
     case OP_DAA: {
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint16_t a = gb->a;\n", ws);
-        fprintf(f, "%s    if (!gb->f_n) {\n", ws);
-        fprintf(f, "%s        if (gb->f_h || (a & 0xF) > 9)\n", ws);
+        fprintf(f, "%s    uint16_t a = ctx->a;\n", ws);
+        fprintf(f, "%s    if (!ctx->f_n) {\n", ws);
+        fprintf(f, "%s        if (ctx->f_h || (a & 0xF) > 9)\n", ws);
         fprintf(f, "%s            a += 0x06;\n", ws);
-        fprintf(f, "%s        if (gb->f_c || a > 0x9F)\n", ws);
+        fprintf(f, "%s        if (ctx->f_c || a > 0x9F)\n", ws);
         fprintf(f, "%s            a += 0x60;\n", ws);
         fprintf(f, "%s    } else {\n", ws);
-        fprintf(f, "%s        if (gb->f_h)\n", ws);
+        fprintf(f, "%s        if (ctx->f_h)\n", ws);
         fprintf(f, "%s            a = (a - 0x06) & 0xFF;\n", ws);
-        fprintf(f, "%s        if (gb->f_c)\n", ws);
+        fprintf(f, "%s        if (ctx->f_c)\n", ws);
         fprintf(f, "%s            a -= 0x60;\n", ws);
         fprintf(f, "%s    }\n", ws);
-        fprintf(f, "%s    gb->f_h = 0;\n", ws);
-        fprintf(f, "%s    if (a & 0x100) gb->f_c = 1;\n", ws);
-        fprintf(f, "%s    gb->a = a & 0xFF;\n", ws);
-        fprintf(f, "%s    gb->f_z = (gb->a == 0) ? 1 : 0;\n", ws);
+        fprintf(f, "%s    ctx->f_h = 0;\n", ws);
+        fprintf(f, "%s    if (a & 0x100) ctx->f_c = 1;\n", ws);
+        fprintf(f, "%s    ctx->a = a & 0xFF;\n", ws);
+        fprintf(f, "%s    ctx->f_z = (ctx->a == 0) ? 1 : 0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
     }
 
     /* ----- CPL (complement A) ----- */
     case OP_CPL:
-        fprintf(f, "%sgb->a = ~gb->a;\n", ws);
-        fprintf(f, "%sgb->f_n = 1; gb->f_h = 1;\n", ws);
+        fprintf(f, "%sctx->a = ~ctx->a;\n", ws);
+        fprintf(f, "%sctx->f_n = 1; ctx->f_h = 1;\n", ws);
         break;
 
     /* ----- SCF (set carry flag) ----- */
     case OP_SCF:
-        fprintf(f, "%sgb->f_n = 0; gb->f_h = 0; gb->f_c = 1;\n", ws);
+        fprintf(f, "%sctx->f_n = 0; ctx->f_h = 0; ctx->f_c = 1;\n", ws);
         break;
 
     /* ----- CCF (complement carry flag) ----- */
     case OP_CCF:
-        fprintf(f, "%sgb->f_n = 0; gb->f_h = 0; gb->f_c = !gb->f_c;\n", ws);
+        fprintf(f, "%sctx->f_n = 0; ctx->f_h = 0; ctx->f_c = !ctx->f_c;\n", ws);
         break;
 
     /* ----- RLCA (rotate A left, old bit 7 to carry) ----- */
     case OP_RLCA:
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint8_t bit7 = (gb->a >> 7) & 1;\n", ws);
-        fprintf(f, "%s    gb->a = (gb->a << 1) | bit7;\n", ws);
-        fprintf(f, "%s    gb->f_z = 0; gb->f_n = 0; gb->f_h = 0; gb->f_c = bit7;\n", ws);
+        fprintf(f, "%s    uint8_t bit7 = (ctx->a >> 7) & 1;\n", ws);
+        fprintf(f, "%s    ctx->a = (ctx->a << 1) | bit7;\n", ws);
+        fprintf(f, "%s    ctx->f_z = 0; ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit7;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
 
     /* ----- RRCA (rotate A right, old bit 0 to carry) ----- */
     case OP_RRCA:
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint8_t bit0 = gb->a & 1;\n", ws);
-        fprintf(f, "%s    gb->a = (gb->a >> 1) | (bit0 << 7);\n", ws);
-        fprintf(f, "%s    gb->f_z = 0; gb->f_n = 0; gb->f_h = 0; gb->f_c = bit0;\n", ws);
+        fprintf(f, "%s    uint8_t bit0 = ctx->a & 1;\n", ws);
+        fprintf(f, "%s    ctx->a = (ctx->a >> 1) | (bit0 << 7);\n", ws);
+        fprintf(f, "%s    ctx->f_z = 0; ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
 
     /* ----- RLA (rotate A left through carry) ----- */
     case OP_RLA:
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-        fprintf(f, "%s    gb->f_c = (gb->a >> 7) & 1;\n", ws);
-        fprintf(f, "%s    gb->a = (gb->a << 1) | old_carry;\n", ws);
-        fprintf(f, "%s    gb->f_z = 0; gb->f_n = 0; gb->f_h = 0;\n", ws);
+        fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+        fprintf(f, "%s    ctx->f_c = (ctx->a >> 7) & 1;\n", ws);
+        fprintf(f, "%s    ctx->a = (ctx->a << 1) | old_carry;\n", ws);
+        fprintf(f, "%s    ctx->f_z = 0; ctx->f_n = 0; ctx->f_h = 0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
 
     /* ----- RRA (rotate A right through carry) ----- */
     case OP_RRA:
         fprintf(f, "%s{\n", ws);
-        fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-        fprintf(f, "%s    gb->f_c = gb->a & 1;\n", ws);
-        fprintf(f, "%s    gb->a = (gb->a >> 1) | (old_carry << 7);\n", ws);
-        fprintf(f, "%s    gb->f_z = 0; gb->f_n = 0; gb->f_h = 0;\n", ws);
+        fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+        fprintf(f, "%s    ctx->f_c = ctx->a & 1;\n", ws);
+        fprintf(f, "%s    ctx->a = (ctx->a >> 1) | (old_carry << 7);\n", ws);
+        fprintf(f, "%s    ctx->f_z = 0; ctx->f_n = 0; ctx->f_h = 0;\n", ws);
         fprintf(f, "%s}\n", ws);
         break;
 
@@ -628,12 +636,12 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_RLC: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
             fprintf(f, "%s    uint8_t bit7 = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val = (val << 1) | bit7;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = bit7;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit7;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
@@ -641,8 +649,8 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
             fprintf(f, "%s    uint8_t bit7 = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val = (val << 1) | bit7;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = bit7;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit7;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -654,12 +662,12 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_RRC: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
             fprintf(f, "%s    uint8_t bit0 = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (bit0 << 7);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = bit0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
@@ -667,8 +675,8 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
             fprintf(f, "%s    uint8_t bit0 = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (bit0 << 7);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = bit0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = bit0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -680,23 +688,23 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_RL: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-            fprintf(f, "%s    gb->f_c = (val >> 7) & 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+            fprintf(f, "%s    ctx->f_c = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val = (val << 1) | old_carry;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-            fprintf(f, "%s    gb->f_c = (val >> 7) & 1;\n", ws);
+            fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+            fprintf(f, "%s    ctx->f_c = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val = (val << 1) | old_carry;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -708,23 +716,23 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_RR: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (old_carry << 7);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    uint8_t old_carry = gb->f_c;\n", ws);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    uint8_t old_carry = ctx->f_c;\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (old_carry << 7);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -736,21 +744,21 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_SLA: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_c = (val >> 7) & 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_c = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val <<= 1;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    gb->f_c = (val >> 7) & 1;\n", ws);
+            fprintf(f, "%s    ctx->f_c = (val >> 7) & 1;\n", ws);
             fprintf(f, "%s    val <<= 1;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -762,21 +770,21 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_SRA: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (val & 0x80);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val = (val >> 1) | (val & 0x80);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -788,19 +796,19 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_SWAP: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
             fprintf(f, "%s    val = ((val & 0xF) << 4) | ((val >> 4) & 0xF);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
             fprintf(f, "%s    val = ((val & 0xF) << 4) | ((val >> 4) & 0xF);\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0; gb->f_c = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0; ctx->f_c = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -812,21 +820,21 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_SRL: {
         if (inst->op1 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val >>= 1;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op1, imm8, imm16);
             fprintf(f, "%s{\n", ws);
             fprintf(f, "%s    uint8_t val = %s;\n", ws, buf1);
-            fprintf(f, "%s    gb->f_c = val & 1;\n", ws);
+            fprintf(f, "%s    ctx->f_c = val & 1;\n", ws);
             fprintf(f, "%s    val >>= 1;\n", ws);
-            fprintf(f, "%s    gb->f_z = (val == 0) ? 1 : 0;\n", ws);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 0;\n", ws);
+            fprintf(f, "%s    ctx->f_z = (val == 0) ? 1 : 0;\n", ws);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 0;\n", ws);
             fprintf(f, "%s    ", ws);
             operand_write8(f, 0, inst->op1, "val", imm8, imm16);
             fprintf(f, "%s}\n", ws);
@@ -839,14 +847,14 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         int bit = bit_index(inst->op1);
         if (inst->op2 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
-            fprintf(f, "%s    gb->f_z = !(val & (1 << %d)) ? 1 : 0;\n", ws, bit);
-            fprintf(f, "%s    gb->f_n = 0; gb->f_h = 1;\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
+            fprintf(f, "%s    ctx->f_z = !(val & (1 << %d)) ? 1 : 0;\n", ws, bit);
+            fprintf(f, "%s    ctx->f_n = 0; ctx->f_h = 1;\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op2, imm8, imm16);
-            fprintf(f, "%sgb->f_z = !(%s & (1 << %d)) ? 1 : 0;\n", ws, buf1, bit);
-            fprintf(f, "%sgb->f_n = 0; gb->f_h = 1;\n", ws);
+            fprintf(f, "%sctx->f_z = !(%s & (1 << %d)) ? 1 : 0;\n", ws, buf1, bit);
+            fprintf(f, "%sctx->f_n = 0; ctx->f_h = 1;\n", ws);
         }
         break;
     }
@@ -856,9 +864,9 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         int bit = bit_index(inst->op1);
         if (inst->op2 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
             fprintf(f, "%s    val &= ~(1 << %d);\n", ws, bit);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op2, imm8, imm16);
@@ -874,9 +882,9 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         int bit = bit_index(inst->op1);
         if (inst->op2 == OPERAND_IND_HL) {
             fprintf(f, "%s{\n", ws);
-            fprintf(f, "%s    uint8_t val = mem_read8(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%s    uint8_t val = gb_read8(ctx, ctx->hl);\n", ws);
             fprintf(f, "%s    val |= (1 << %d);\n", ws, bit);
-            fprintf(f, "%s    mem_write8(gb, REG_HL(gb), val);\n", ws);
+            fprintf(f, "%s    gb_write8(ctx, ctx->hl, val);\n", ws);
             fprintf(f, "%s}\n", ws);
         } else {
             operand_read8(buf1, sizeof(buf1), inst->op2, imm8, imm16);
@@ -891,23 +899,23 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_JP: {
         if (inst->branch == BRANCH_JUMP_INDIRECT) {
             /* JP (HL) - indirect jump, emit as dispatch */
-            fprintf(f, "%sdispatch_jump(gb, REG_HL(gb));\n", ws);
+            fprintf(f, "%sdispatch_jump(ctx, ctx->hl);\n", ws);
             fprintf(f, "%sreturn;\n", ws);
         } else if (inst->branch == BRANCH_JUMP) {
             /* Unconditional JP a16 */
             if (has_label(valid_labels, num_valid_labels, imm16)) {
                 fprintf(f, "%sgoto label_%04X;\n", ws, imm16);
             } else {
-                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); return; /* JP to unincluded block */\n", ws, bank, imm16);
+                fprintf(f, "%sdispatch_call(ctx, %d, 0x%04X); return; /* JP to unincluded block */\n", ws, bank, imm16);
             }
         } else if (inst->branch == BRANCH_JUMP_COND) {
             /* Conditional JP cc, a16 */
             if (has_label(valid_labels, num_valid_labels, imm16)) {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); goto label_%04X; }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, imm16);
             } else {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); return; }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, %d, 0x%04X); return; }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, bank, imm16);
             }
@@ -924,16 +932,16 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             if (has_label(valid_labels, num_valid_labels, target)) {
                 fprintf(f, "%sgoto label_%04X;\n", ws, target);
             } else {
-                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); return; /* JR to unincluded block */\n", ws, bank, target);
+                fprintf(f, "%sdispatch_call(ctx, %d, 0x%04X); return; /* JR to unincluded block */\n", ws, bank, target);
             }
         } else if (inst->branch == BRANCH_JUMP_COND) {
             /* Conditional JR cc, r8 */
             if (has_label(valid_labels, num_valid_labels, target)) {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; goto label_%04X; }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); goto label_%04X; }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, target);
             } else {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); return; }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, %d, 0x%04X); return; }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, bank, target);
             }
@@ -948,9 +956,9 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
          * runtime dispatch that will log and return gracefully. */
         if (imm16 >= 0x8000) {
             if (inst->branch == BRANCH_CALL) {
-                fprintf(f, "%sdispatch_call(gb, %d, 0x%04X); /* non-ROM CALL */\n", ws, bank, imm16);
+                fprintf(f, "%sdispatch_call(ctx, %d, 0x%04X); /* non-ROM CALL */\n", ws, bank, imm16);
             } else if (inst->branch == BRANCH_CALL_COND) {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); } /* non-ROM CALL */\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, %d, 0x%04X); } /* non-ROM CALL */\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, bank, imm16);
             }
@@ -965,18 +973,18 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
         if (inst->branch == BRANCH_CALL) {
             /* Unconditional CALL a16 */
             if (call_runtime_bank) {
-                fprintf(f, "%sdispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X);\n", ws, imm16);
+                fprintf(f, "%sdispatch_call(ctx, (uint8_t)ctx->rom_bank, 0x%04X);\n", ws, imm16);
             } else {
-                fprintf(f, "%s%s(gb);\n", ws, fname);
+                fprintf(f, "%s%s(ctx);\n", ws, fname);
             }
         } else if (inst->branch == BRANCH_CALL_COND) {
             /* Conditional CALL cc, a16 */
             if (call_runtime_bank) {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, (uint8_t)ctx->rom_bank, 0x%04X); }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, imm16);
             } else {
-                fprintf(f, "%sif (%s) { gb->cycles += %d; %s(gb); }\n",
+                fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); %s(ctx); }\n",
                         ws, cond_expr(inst->op1),
                         inst->cycles_taken - inst->cycles, fname);
             }
@@ -991,7 +999,7 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
             fprintf(f, "%sreturn;\n", ws);
         } else if (inst->branch == BRANCH_RET_COND) {
             /* Conditional RET cc */
-            fprintf(f, "%sif (%s) { gb->cycles += %d; return; }\n",
+            fprintf(f, "%sif (%s) { gb_add_cycles(ctx, %d); return; }\n",
                     ws, cond_expr(inst->op1),
                     inst->cycles_taken - inst->cycles);
         }
@@ -1000,7 +1008,7 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
 
     /* ----- RETI ----- */
     case OP_RETI:
-        fprintf(f, "%sgb->ime = 1;\n", ws);
+        fprintf(f, "%sctx->ime = 1;\n", ws);
         fprintf(f, "%sreturn;\n", ws);
         break;
 
@@ -1008,14 +1016,14 @@ void codegen_emit_instruction(FILE *f, const sm83_inst_t *inst,
     case OP_RST: {
         uint16_t vec = rst_vector(inst->op1);
         func_name(fname, sizeof(fname), 0, vec); /* RST always targets bank 0 */
-        fprintf(f, "%s%s(gb);\n", ws, fname);
+        fprintf(f, "%s%s(ctx);\n", ws, fname);
         break;
     }
 
     /* ----- INVALID ----- */
     case OP_INVALID:
         fprintf(f, "%s/* INVALID OPCODE 0x%02X */\n", ws, inst->opcode);
-        fprintf(f, "%shal_invalid(gb, 0x%04X, 0x%02X);\n", ws, addr, inst->opcode);
+        fprintf(f, "%sfprintf(stderr, \"INVALID OPCODE 0x%02X at 0x%04X\\n\");\n", ws, inst->opcode, addr);
         break;
 
     default:
@@ -1069,18 +1077,28 @@ static void emit_data_region(FILE *f, const codegen_ctx_t *ctx,
 /* Bank 0 functions that are provided by hand-written stubs in stubs.c.
  * These use the PUSH return_addr + JP (HL) pattern to simulate a CALL,
  * which doesn't work in a static recompiler (the cleanup code at the
- * return address never executes). The stubs handle this correctly. */
-static const uint16_t stub_func_addrs_bank0[] = {
+ * return address never executes). The stubs handle this correctly.
+ * Addresses differ by game: Red/Blue vs Yellow. */
+static const uint16_t stub_func_addrs_red[] = {
     0x35D6,  /* Bankswitch (farcall) */
     0x3E6D,  /* Predef */
     0x3D97,  /* CallFunctionInTable */
     0       /* sentinel */
 };
+static const uint16_t stub_func_addrs_yellow[] = {
+    0x3E84,  /* Bankswitch (farcall) */
+    0x3EB4,  /* Predef */
+    0x3D93,  /* CallFunctionInTable */
+    0       /* sentinel */
+};
 
-static bool is_stub_function(int bank, uint16_t entry_addr) {
+static bool is_stub_function(const codegen_ctx_t *cctx, int bank, uint16_t entry_addr) {
     if (bank != 0) return false;
-    for (int i = 0; stub_func_addrs_bank0[i] != 0; i++) {
-        if (entry_addr == stub_func_addrs_bank0[i])
+    const uint16_t *stubs = stub_func_addrs_red;
+    if (cctx->game_name && strcmp(cctx->game_name, "yellow") == 0)
+        stubs = stub_func_addrs_yellow;
+    for (int i = 0; stubs[i] != 0; i++) {
+        if (entry_addr == stubs[i])
             return true;
     }
     return false;
@@ -1179,7 +1197,7 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
     }
     char fname[64];
     func_name(fname, sizeof(fname), bank, func->entry_addr);
-    fprintf(f, "void %s(gb_state_t *gb) {\n", fname);
+    fprintf(f, "void %s(GBContext *ctx) {\n", fname);
 
     /* If this function is an NLR escape destination, clear the flag */
     {
@@ -1236,7 +1254,7 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                      * These will be called as functions instead of inlined. */
                     int blk_fid = ba->blocks[b].function_id;
                     if (blk_fid >= 0 && blk_fid < ba->function_count &&
-                        is_stub_function(bank,
+                        is_stub_function(ctx, bank,
                             ba->functions[blk_fid].entry_addr)) {
                         break; /* Skip - handled by stub */
                     }
@@ -1307,10 +1325,9 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
         fprintf(f, "label_%04X:\n", blk->start_addr);
 
         /* Sync hardware (PPU, timer) at basic block boundaries */
-        fprintf(f, "    { uint32_t _sc = (uint32_t)(gb->cycles - gb->sync_cycles);"
-                   " if (_sc > 0) { hal_sync(gb, _sc); gb->sync_cycles = gb->cycles; } }\n");
+        fprintf(f, "    pokemon_sync(ctx);\n");
         /* Yield if stop requested (from event processing) */
-        fprintf(f, "    if (!gb->running) return;\n");
+        fprintf(f, "    if (g_pokemon_quit) return;\n");
 
         /* Decode and emit each instruction in this block */
         uint16_t pc = blk->start_addr;
@@ -1342,7 +1359,7 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                     sm83_format(disasm, sizeof(disasm), &inst, pc, inst_imm8, inst_imm16);
                     fprintf(f, "    /* %04X: %s [NLR: skip POP, set %s] */\n",
                             pc, disasm, nlr->flag_name);
-                    fprintf(f, "    gb->cycles += %d;\n", inst.cycles);
+                    fprintf(f, "    gb_add_cycles(ctx, %d);\n", inst.cycles);
                     fprintf(f, "    %s = 1;\n", nlr->flag_name);
                     patched = true;
                 }
@@ -1382,32 +1399,32 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                     char disasm[64];
                     sm83_format(disasm, sizeof(disasm), &inst, pc, inst_imm8, inst_imm16);
                     fprintf(f, "    /* %04X: %s */\n", pc, disasm);
-                    fprintf(f, "    gb->cycles += %d;\n", inst.cycles);
+                    fprintf(f, "    gb_add_cycles(ctx, %d);\n", inst.cycles);
 
                     if (inst.branch == BRANCH_JUMP) {
                         if (runtime_bank) {
                             /* Target is in switchable bank area - dispatch at runtime */
-                            fprintf(f, "    dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); return;\n", target);
+                            fprintf(f, "    dispatch_call(ctx, (uint8_t)ctx->rom_bank, 0x%04X); return;\n", target);
                         } else if (has_func) {
                             char tname[64];
                             func_name(tname, sizeof(tname), tgt_bank, target);
-                            fprintf(f, "    %s(gb); return;\n", tname);
+                            fprintf(f, "    %s(ctx); return;\n", tname);
                         } else {
-                            fprintf(f, "    dispatch_jump(gb, 0x%04X); return;\n", target);
+                            fprintf(f, "    dispatch_jump(ctx, 0x%04X); return;\n", target);
                         }
                     } else {
                         /* Conditional */
                         const char *cond = cond_expr(inst.op1);
                         if (runtime_bank) {
-                            fprintf(f, "    if (%s) { gb->cycles += %d; dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); return; }\n",
+                            fprintf(f, "    if (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, (uint8_t)ctx->rom_bank, 0x%04X); return; }\n",
                                     cond, inst.cycles_taken - inst.cycles, target);
                         } else if (has_func) {
                             char tname[64];
                             func_name(tname, sizeof(tname), tgt_bank, target);
-                            fprintf(f, "    if (%s) { gb->cycles += %d; %s(gb); return; }\n",
+                            fprintf(f, "    if (%s) { gb_add_cycles(ctx, %d); %s(ctx); return; }\n",
                                     cond, inst.cycles_taken - inst.cycles, tname);
                         } else {
-                            fprintf(f, "    if (%s) { gb->cycles += %d; dispatch_jump(gb, 0x%04X); return; }\n",
+                            fprintf(f, "    if (%s) { gb_add_cycles(ctx, %d); dispatch_jump(ctx, 0x%04X); return; }\n",
                                     cond, inst.cycles_taken - inst.cycles, target);
                         }
                     }
@@ -1436,12 +1453,12 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                         char disasm[64];
                         sm83_format(disasm, sizeof(disasm), &inst, pc, inst_imm8, inst_imm16);
                         fprintf(f, "    /* %04X: %s */\n", pc, disasm);
-                        fprintf(f, "    gb->cycles += %d;\n", inst.cycles);
+                        fprintf(f, "    gb_add_cycles(ctx, %d);\n", inst.cycles);
                         if (inst.branch == BRANCH_CALL) {
-                            fprintf(f, "    dispatch_call(gb, %d, 0x%04X); /* undiscovered func */\n",
+                            fprintf(f, "    dispatch_call(ctx, %d, 0x%04X); /* undiscovered func */\n",
                                     call_tgt_bank, inst_imm16);
                         } else {
-                            fprintf(f, "    if (%s) { gb->cycles += %d; dispatch_call(gb, %d, 0x%04X); } /* undiscovered func */\n",
+                            fprintf(f, "    if (%s) { gb_add_cycles(ctx, %d); dispatch_call(ctx, %d, 0x%04X); } /* undiscovered func */\n",
                                     cond_expr(inst.op1), inst.cycles_taken - inst.cycles,
                                     call_tgt_bank, inst_imm16);
                         }
@@ -1515,9 +1532,9 @@ static void emit_function(FILE *f, const codegen_ctx_t *ctx,
                     if (has_ft_func) {
                         char tname[64];
                         func_name(tname, sizeof(tname), ft_bank, ft_addr);
-                        fprintf(f, "    %s(gb); return; /* fallthrough to next function */\n", tname);
+                        fprintf(f, "    %s(ctx); return; /* fallthrough to next function */\n", tname);
                     } else if (ft_addr >= 0x4000 && ft_addr < 0x8000 && bank == 0) {
-                        fprintf(f, "    dispatch_call(gb, (uint8_t)gb->mem->rom_bank, 0x%04X); return; /* fallthrough */\n", ft_addr);
+                        fprintf(f, "    dispatch_call(ctx, (uint8_t)ctx->rom_bank, 0x%04X); return; /* fallthrough */\n", ft_addr);
                     }
                 }
             }
@@ -1551,8 +1568,8 @@ int codegen_emit_bank(codegen_ctx_t *ctx, int bank) {
     /* File header */
     fprintf(f, "/* bank_%02X.c - auto-generated from %s ROM */\n", bank, ctx->game_name);
     fprintf(f, "/* Do not edit by hand. */\n\n");
-    fprintf(f, "#include \"hal/cpu.h\"\n");
-    fprintf(f, "#include \"hal/memory.h\"\n");
+    fprintf(f, "#include \"gbrt.h\"\n");
+    fprintf(f, "#include \"pokemon_rt.h\"\n");
     fprintf(f, "#include \"dispatch.h\"\n");
     fprintf(f, "\n");
 
@@ -1565,7 +1582,7 @@ int codegen_emit_bank(codegen_ctx_t *ctx, int bank) {
     for (int fi = 0; fi < ba->function_count; fi++) {
         char fname[64];
         func_name(fname, sizeof(fname), bank, ba->functions[fi].entry_addr);
-        fprintf(f, "void %s(gb_state_t *gb);\n", fname);
+        fprintf(f, "void %s(GBContext *ctx);\n", fname);
     }
     fprintf(f, "\n");
 
@@ -1640,7 +1657,7 @@ int codegen_emit_bank(codegen_ctx_t *ctx, int bank) {
 
     /* Emit all functions (skip stub functions provided by stubs.c) */
     for (int fi = 0; fi < ba->function_count; fi++) {
-        if (is_stub_function(bank, ba->functions[fi].entry_addr)) {
+        if (is_stub_function(ctx, bank, ba->functions[fi].entry_addr)) {
             fprintf(f, "\n/* func_b%02X_%04X: provided by stubs.c */\n",
                     bank, ba->functions[fi].entry_addr);
             continue;
@@ -1678,15 +1695,15 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
     fprintf(hf, "#ifndef DISPATCH_H\n");
     fprintf(hf, "#define DISPATCH_H\n\n");
     fprintf(hf, "#include <stdint.h>\n");
-    fprintf(hf, "#include \"hal/cpu.h\"\n\n");
+    fprintf(hf, "#include \"gbrt.h\"\n\n");
     fprintf(hf, "/* Call a function by bank and address */\n");
-    fprintf(hf, "void dispatch_call(gb_state_t *gb, uint8_t bank, uint16_t addr);\n\n");
+    fprintf(hf, "void dispatch_call(GBContext *ctx, uint8_t bank, uint16_t addr);\n\n");
     fprintf(hf, "/* Jump (tail-call) to a function by address */\n");
-    fprintf(hf, "void dispatch_jump(gb_state_t *gb, uint16_t addr);\n\n");
+    fprintf(hf, "void dispatch_jump(GBContext *ctx, uint16_t addr);\n\n");
     fprintf(hf, "/* Initialize dispatch system */\n");
-    fprintf(hf, "void dispatch_init(gb_state_t *gb);\n\n");
+    fprintf(hf, "void dispatch_init(GBContext *ctx);\n\n");
     fprintf(hf, "/* Run the game (calls entry point in a loop) */\n");
-    fprintf(hf, "void dispatch_run(gb_state_t *gb);\n\n");
+    fprintf(hf, "void dispatch_run(GBContext *ctx);\n\n");
 
     /* Emit extern declarations for all known function entry points */
     for (int b = 0; b < ctx->analysis->num_banks; b++) {
@@ -1694,7 +1711,7 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
         for (int fi = 0; fi < ba->function_count; fi++) {
             char fname[64];
             func_name(fname, sizeof(fname), b, ba->functions[fi].entry_addr);
-            fprintf(hf, "extern void %s(gb_state_t *gb);\n", fname);
+            fprintf(hf, "extern void %s(GBContext *ctx);\n", fname);
         }
     }
 
@@ -1711,22 +1728,23 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
 
     fprintf(cf, "/* dispatch.c - auto-generated cross-bank dispatch */\n\n");
     fprintf(cf, "#include \"dispatch.h\"\n");
+    fprintf(cf, "#include \"pokemon_debug.h\"\n");
     fprintf(cf, "#include <stdio.h>\n");
     fprintf(cf, "#include <stdlib.h>\n\n");
     fprintf(cf, "/* HRAM functions (defined in stubs.c) */\n");
-    fprintf(cf, "extern void func_b00_FF80(gb_state_t *gb);\n\n");
+    fprintf(cf, "extern void func_b00_FF80(GBContext *ctx);\n\n");
 
     /* Build a dispatch table as a switch statement.
      * For each bank, list known function entry points. */
     fprintf(cf, "/* Dispatch table entry */\n");
-    fprintf(cf, "typedef void (*dispatch_fn_t)(gb_state_t *gb);\n\n");
-    fprintf(cf, "/* Debug logging toggle (defined in main.c) */\n");
-    fprintf(cf, "extern int dispatch_debug_enabled;\n\n");
+    fprintf(cf, "typedef void (*dispatch_fn_t)(GBContext *ctx);\n\n");
 
     /* Generate dispatch_call */
-    fprintf(cf, "void dispatch_call(gb_state_t *gb, uint8_t bank, uint16_t addr) {\n");
-    fprintf(cf, "    if (dispatch_debug_enabled) {\n");
-    fprintf(cf, "        fprintf(stderr, \"dispatch_call: bank=%%02X addr=%%04X\\n\", bank, addr);\n");
+    fprintf(cf, "void dispatch_call(GBContext *ctx, uint8_t bank, uint16_t addr) {\n");
+    fprintf(cf, "    dtrace_record(bank, addr, ctx->a, ctx->sp, ctx->hl, 'C');\n");
+    fprintf(cf, "    if (g_debug_dispatch) {\n");
+    fprintf(cf, "        fprintf(stderr, \"dispatch_call: bank=%%02X addr=%%04X A=%%02X SP=%%04X HL=%%04X\\n\",\n");
+    fprintf(cf, "                bank, addr, ctx->a, ctx->sp, ctx->hl);\n");
     fprintf(cf, "    }\n");
     fprintf(cf, "    switch (bank) {\n");
 
@@ -1740,7 +1758,7 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
         for (int fi = 0; fi < ba->function_count; fi++) {
             char fname[64];
             func_name(fname, sizeof(fname), b, ba->functions[fi].entry_addr);
-            fprintf(cf, "        case 0x%04X: %s(gb); return;\n",
+            fprintf(cf, "        case 0x%04X: %s(ctx); return;\n",
                     ba->functions[fi].entry_addr, fname);
         }
 
@@ -1754,25 +1772,32 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
     fprintf(cf, "    /* HRAM functions (code copied to HRAM at runtime, e.g. DMA routine) */\n");
     fprintf(cf, "    if (addr >= 0xFF80 && addr <= 0xFFFE) {\n");
     fprintf(cf, "        switch (addr) {\n");
-    fprintf(cf, "        case 0xFF80: func_b00_FF80(gb); return;\n");
+    fprintf(cf, "        case 0xFF80: func_b00_FF80(ctx); return;\n");
     fprintf(cf, "        default: break;\n");
     fprintf(cf, "        }\n");
     fprintf(cf, "    }\n");
-    fprintf(cf, "    fprintf(stderr, \"dispatch_call: unknown target bank=%%02X addr=%%04X\\n\", bank, addr);\n");
+    fprintf(cf, "    /* Unknown target: fall back to interpreter */\n");
+    fprintf(cf, "    if (g_debug_dispatch) {\n");
+    fprintf(cf, "        fprintf(stderr, \"DISPATCH FALLBACK: bank=%%02X addr=%%04X -> interpreter\\n\", bank, addr);\n");
+    fprintf(cf, "    }\n");
+    fprintf(cf, "    gb_write8(ctx, 0xFFB8, bank);\n");
+    fprintf(cf, "    gb_write8(ctx, 0x2000, bank);\n");
+    fprintf(cf, "    gb_interpret(ctx, addr);\n");
     fprintf(cf, "}\n\n");
 
     /* Generate dispatch_jump - for JP (HL) and similar indirect jumps.
      * For addresses in bank 0 range (0x0000-0x3FFF), use bank 0 directly.
      * For switchable bank range (0x4000-0x7FFF), use the current ROM bank. */
-    fprintf(cf, "void dispatch_jump(gb_state_t *gb, uint16_t addr) {\n");
+    fprintf(cf, "void dispatch_jump(GBContext *ctx, uint16_t addr) {\n");
+    fprintf(cf, "    dtrace_record((uint8_t)ctx->rom_bank, addr, ctx->a, ctx->sp, ctx->hl, 'J');\n");
     fprintf(cf, "    /* For switchable bank area, dispatch using current ROM bank */\n");
     fprintf(cf, "    if (addr >= 0x4000 && addr < 0x8000) {\n");
-    fprintf(cf, "        dispatch_call(gb, (uint8_t)gb->mem->rom_bank, addr);\n");
+    fprintf(cf, "        dispatch_call(ctx, (uint8_t)ctx->rom_bank, addr);\n");
     fprintf(cf, "        return;\n");
     fprintf(cf, "    }\n");
     fprintf(cf, "    /* HRAM routines (OAM DMA wait loop at FF80-FF89) */\n");
     fprintf(cf, "    if (addr >= 0xFF80 && addr <= 0xFF89) {\n");
-    fprintf(cf, "        func_b00_FF80(gb);\n");
+    fprintf(cf, "        func_b00_FF80(ctx);\n");
     fprintf(cf, "        return;\n");
     fprintf(cf, "    }\n");
     fprintf(cf, "    /* Bank 0 addresses */\n");
@@ -1784,26 +1809,38 @@ int codegen_emit_dispatch(codegen_ctx_t *ctx) {
         for (int fi = 0; fi < ba0->function_count; fi++) {
             char fname[64];
             func_name(fname, sizeof(fname), 0, ba0->functions[fi].entry_addr);
-            fprintf(cf, "    case 0x%04X: %s(gb); return;\n",
+            fprintf(cf, "    case 0x%04X: %s(ctx); return;\n",
                     ba0->functions[fi].entry_addr, fname);
         }
     }
 
     fprintf(cf, "    default: break;\n");
     fprintf(cf, "    }\n");
-    fprintf(cf, "    fprintf(stderr, \"dispatch_jump: unknown target addr=%%04X bank=%%02X\\n\", addr, gb->mem->rom_bank);\n");
+    fprintf(cf, "    /* Unknown target: fall back to interpreter */\n");
+    fprintf(cf, "    if (g_debug_dispatch) {\n");
+    fprintf(cf, "        fprintf(stderr, \"DISPATCH JUMP FALLBACK: addr=%%04X bank=%%02X -> interpreter\\n\", addr, ctx->rom_bank);\n");
+    fprintf(cf, "    }\n");
+    fprintf(cf, "    gb_interpret(ctx, addr);\n");
     fprintf(cf, "}\n\n");
 
+    /* Read entry point from ROM header: 0x0100 is NOP, 0x0101 is JP nn */
+    uint16_t entry_addr = 0x0150; /* default */
+    if (ctx->rom_size >= 0x0104 && ctx->rom_data[0x0101] == 0xC3) {
+        entry_addr = ctx->rom_data[0x0102] | ((uint16_t)ctx->rom_data[0x0103] << 8);
+    }
+    char entry_name[64];
+    func_name(entry_name, sizeof(entry_name), 0, entry_addr);
+
     /* dispatch_init / dispatch_run */
-    fprintf(cf, "void dispatch_init(gb_state_t *gb) {\n");
-    fprintf(cf, "    (void)gb;\n");
+    fprintf(cf, "void dispatch_init(GBContext *ctx) {\n");
+    fprintf(cf, "    (void)ctx;\n");
     fprintf(cf, "}\n\n");
-    fprintf(cf, "void dispatch_run(gb_state_t *gb) {\n");
-    fprintf(cf, "    /* Run the entry point - it loops internally via gotos.\n");
-    fprintf(cf, "     * Frame rendering and event processing happen in the\n");
-    fprintf(cf, "     * frame_callback, triggered from hal_sync when PPU\n");
-    fprintf(cf, "     * produces a frame. Exits when gb->running becomes false. */\n");
-    fprintf(cf, "    func_b00_0150(gb);\n");
+    fprintf(cf, "void dispatch_run(GBContext *ctx) {\n");
+    fprintf(cf, "    /* Run the entry point (0x%04X) - it loops internally via gotos.\n", entry_addr);
+    fprintf(cf, "     * Frame rendering and event processing happen in\n");
+    fprintf(cf, "     * pokemon_sync, triggered at basic block boundaries.\n");
+    fprintf(cf, "     * Exits when g_pokemon_quit becomes true. */\n");
+    fprintf(cf, "    %s(ctx);\n", entry_name);
     fprintf(cf, "}\n");
 
     fclose(cf);

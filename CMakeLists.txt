@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(pokemon_recomp C)
+project(pokemon_recomp C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Compiler warnings
 if(MSVC)
@@ -14,38 +16,13 @@ endif()
 # Build the recompiler tool first
 add_subdirectory(tools/recompiler)
 
-# Find SDL2 for the game runtime
-find_package(SDL2 QUIET)
+# Build gb-recompiled runtime (provides gbrt static library + SDL2 + ImGui)
+add_subdirectory(gbrecomp/runtime)
 
-# Game runtime HAL sources
-set(HAL_SOURCES
-    src/hal/cpu.c
-    src/hal/memory.c
-    src/hal/ppu.c
-    src/hal/apu.c
-    src/hal/timer.c
-    src/hal/joypad.c
-    src/hal/dma.c
-    src/hal/serial.c
-    src/hal/interrupts.c
-)
-
-# Platform sources
-set(PLATFORM_SOURCES
-    src/platform/window.c
-    src/platform/renderer.c
-    src/platform/audio.c
-    src/platform/input.c
-    src/platform/menu.c
-)
-
-# Common game sources
+# Pokemon-specific sources (runtime bridge + debug)
 set(GAME_SOURCES
     src/main.c
-    src/config.c
-    src/save.c
-    ${HAL_SOURCES}
-    ${PLATFORM_SOURCES}
+    src/pokemon_debug.c
 )
 
 # Function to add a game target
@@ -62,7 +39,7 @@ function(add_game_target GAME_NAME GAME_DEFINE ROM_VARIANT)
         list(APPEND GENERATED_SOURCES "src/generated/stubs.c")
     endif()
 
-    if(SDL2_FOUND AND GENERATED_SOURCES)
+    if(GENERATED_SOURCES)
         add_executable(${GAME_NAME}
             ${GAME_SOURCES}
             ${GENERATED_SOURCES}
@@ -74,12 +51,10 @@ function(add_game_target GAME_NAME GAME_DEFINE ROM_VARIANT)
         endif()
         target_include_directories(${GAME_NAME} PRIVATE
             src
-            src/hal
-            src/platform
             src/generated
-            ${SDL2_INCLUDE_DIRS}
         )
-        target_link_libraries(${GAME_NAME} PRIVATE ${SDL2_LIBRARIES})
+        # Link against gb-recompiled runtime (provides gbrt.h, SDL2, ImGui)
+        target_link_libraries(${GAME_NAME} PRIVATE gbrt)
     endif()
 endfunction()
 
