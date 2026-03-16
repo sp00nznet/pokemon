@@ -77,11 +77,8 @@ static void predef_impl(GBContext *ctx) {
     /* Look up predef table entry (game-specific addresses) */
 #if defined(GAME_YELLOW)
     /* Yellow: GetPredefPointer in bank 0x3D, table at 0x681D */
-    fprintf(stderr, "  PREDEF: switching to bank 0x3D (mbc_type=%02X, rom_bank before=%d)\n",
-            ctx->mbc_type, ctx->rom_bank);
     gb_write8(ctx, 0xFFB8, 0x3D);
     gb_write8(ctx, 0x2000, 0x3D);
-    fprintf(stderr, "  PREDEF: rom_bank after=%d, reading table at 0x681D\n", ctx->rom_bank);
     uint16_t table_addr = 0x681D;
 #else
     /* Red/Blue: GetPredefPointer in bank 0x13, table at 0x7E79 */
@@ -107,8 +104,9 @@ static void predef_impl(GBContext *ctx) {
 
     /* Switch to target bank and call */
     uint8_t call_bank = (target_addr < 0x4000) ? 0 : target_bank;
-    fprintf(stderr, "PREDEF[%02X]: bank=%02X addr=%04X (saved=%02X rom_bank=%d entry@%04X)\n",
-            predef_id, target_bank, target_addr, saved_bank, ctx->rom_bank, entry_addr);
+    /* Debug: uncomment to trace predef calls
+    fprintf(stderr, "PREDEF[%02X]: bank=%02X addr=%04X\n",
+            predef_id, target_bank, target_addr); */
     gb_write8(ctx, 0xFFB8, target_bank);
     gb_write8(ctx, 0x2000, target_bank);
     dispatch_call(ctx, call_bank, target_addr);

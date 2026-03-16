@@ -996,6 +996,15 @@ void analysis_run_bank(analysis_ctx_t *ctx, int bank)
         sym_entry_point_t entries[32];
         int n = sym_get_entry_points(entries, 32);
 
+        /* Also add the actual ROM entry point from the header JP at 0x0101 */
+        if (ctx->rom_size >= 0x0104 && ctx->rom_data[0x0101] == 0xC3 && n < 32) {
+            uint16_t rom_entry = ctx->rom_data[0x0102] | ((uint16_t)ctx->rom_data[0x0103] << 8);
+            if (rom_entry < 0x4000 && rom_entry != ENTRY_POINT) {
+                entries[n++] = (sym_entry_point_t){rom_entry, 0, "ROMEntryPoint"};
+                printf("Added ROM entry point 0x%04X from header.\n", rom_entry);
+            }
+        }
+
         for (int i = 0; i < n; i++) {
             if (entries[i].bank != 0)
                 continue;
