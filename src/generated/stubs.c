@@ -66,15 +66,6 @@ static void predef_impl(GBContext *ctx) {
     uint8_t saved_bank = gb_read8(ctx, 0xFFB8);
     gb_write8(ctx, 0xCF12, saved_bank);
 
-    /* Switch to bank containing GetPredefPointer */
-#if defined(GAME_YELLOW)
-    uint8_t predef_bank = 0x01;  /* Yellow: GetPredefPointer is in bank 1 */
-#else
-    uint8_t predef_bank = 0x13;  /* Red/Blue: GetPredefPointer is in bank 0x13 */
-#endif
-    gb_write8(ctx, 0xFFB8, predef_bank);
-    gb_write8(ctx, 0x2000, predef_bank);
-
     /* Save registers as GetPredefPointer does */
     gb_write8(ctx, 0xCC4F, ctx->h);
     gb_write8(ctx, 0xCC50, ctx->l);
@@ -83,42 +74,54 @@ static void predef_impl(GBContext *ctx) {
     gb_write8(ctx, 0xCC53, ctx->b);
     gb_write8(ctx, 0xCC54, ctx->c);
 
-    /* Read table base from the GetPredefPointer function.
-     * The function has a LD HL,table_addr instruction that we need to find.
-     * For Red: table at 0x7E79 (read from instruction at 0x7E5B)
-     * For Yellow: need to find it dynamically. */
+    /* Look up predef table entry (game-specific addresses) */
 #if defined(GAME_YELLOW)
-    /* Yellow: search for the LD HL,nnnn instruction in GetPredefPointer.
-     * GetPredefPointer is called via CALL from the predef stub.
-     * Let's use the interpreter for Yellow since addresses differ. */
-    gb_write8(ctx, 0xFFB8, saved_bank);
-    gb_write8(ctx, 0x2000, saved_bank);
-    /* Fall back to interpreter for the whole predef call */
-    gb_interpret(ctx, 0x3EB4);
-    return;
+    /* Yellow: GetPredefPointer in bank 0x3D, table at 0x681D */
+    gb_write8(ctx, 0xFFB8, 0x3D);
+    gb_write8(ctx, 0x2000, 0x3D);
+    uint16_t table_addr = 0x681D;
 #else
-    /* Red/Blue: table address from instruction at 0x7E5C/0x7E5D */
+    /* Red/Blue: GetPredefPointer in bank 0x13, table at 0x7E79 */
+    gb_write8(ctx, 0xFFB8, 0x13);
+    gb_write8(ctx, 0x2000, 0x13);
     uint16_t table_addr = gb_read8(ctx, 0x7E5C) |
                           (gb_read8(ctx, 0x7E5D) << 8);
+#endif
     uint16_t entry_addr = table_addr + (uint16_t)(predef_id * 3);
     uint8_t target_bank = gb_read8(ctx, entry_addr);
     uint8_t lo = gb_read8(ctx, (uint16_t)(entry_addr + 1));
     uint8_t hi = gb_read8(ctx, (uint16_t)(entry_addr + 2));
     uint16_t target_addr = (uint16_t)((hi << 8) | lo);
 
+    /* Store target bank and set HL */
+#if defined(GAME_YELLOW)
+    gb_write8(ctx, 0xD0B6, target_bank);
+#else
     gb_write8(ctx, 0xD0B7, target_bank);
+#endif
     ctx->h = hi;
     ctx->l = lo;
 
+    /* Switch to target bank and call */
     uint8_t call_bank = (target_addr < 0x4000) ? 0 : target_bank;
+    /* Bounds check: Yellow has ~56 predefs, Red has ~75 */
+    if (target_addr == 0 || target_bank > 0x3F) {
+        fprintf(stderr, "PREDEF[%02X]: INVALID -> bank=%02X addr=%04X (saved=%02X)\n",
+                predef_id, target_bank, target_addr, saved_bank);
+        gb_write8(ctx, 0xFFB8, saved_bank);
+        gb_write8(ctx, 0x2000, saved_bank);
+        return;
+    }
+    fprintf(stderr, "PREDEF[%02X]: bank=%02X addr=%04X (saved=%02X)\n",
+            predef_id, target_bank, target_addr, saved_bank);
     gb_write8(ctx, 0xFFB8, target_bank);
     gb_write8(ctx, 0x2000, target_bank);
     dispatch_call(ctx, call_bank, target_addr);
 
+    /* Restore original ROM bank */
     gb_write8(ctx, 0xFFB8, saved_bank);
     gb_write8(ctx, 0x2000, saved_bank);
     gb_add_cycles(ctx, 200);
-#endif
 }
 
 #if defined(GAME_YELLOW)
