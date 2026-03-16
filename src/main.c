@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "gbrt.h"
+#include "ppu.h"
 #include "platform_sdl.h"
 #include "hwtrace.h"
 #include "pokemon_debug.h"
@@ -184,7 +185,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Fix post-boot registers based on game type.
+    /* Fix post-boot registers and PPU mode based on game type.
      * Pokemon Red/Blue are DMG (A=0x01), Yellow is GBC-enhanced (A=0x11). */
 #if defined(GAME_YELLOW)
     /* GBC mode: A=0x11 signals CGB to the game, enabling color palettes */
@@ -193,6 +194,7 @@ int main(int argc, char *argv[]) {
     ctx->bc = 0x0000;
     ctx->de = 0xFF56;
     ctx->hl = 0x000D;
+    /* PPU stays in CGB mode (default) */
 #else
     /* DMG mode: A=0x01 for Red/Blue */
     ctx->af = 0x01B0;  /* A=0x01 (DMG), F=0xB0 (Z=1 N=0 H=1 C=1) */
@@ -200,6 +202,11 @@ int main(int argc, char *argv[]) {
     ctx->bc = 0x0013;
     ctx->de = 0x00D8;
     ctx->hl = 0x014D;
+    /* Set PPU to DMG mode (no CGB palettes) */
+    if (ctx->ppu) {
+        GBPPU *ppu = (GBPPU *)ctx->ppu;
+        ppu->cgb_mode = false;
+    }
 #endif
     ctx->pc = 0x0100;  /* Entry point */
 
