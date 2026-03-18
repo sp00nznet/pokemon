@@ -10,7 +10,7 @@ A static recompiler that translates Pokemon Game Boy ROMs (SM83 CPU) into native
 |------|----------|-------|--------|
 | **Pokemon Red** | DMG / MBC3 | Monochrome | Intro through overworld |
 | **Pokemon Blue** | DMG / MBC3 | Monochrome | Should work (same engine) |
-| **Pokemon Yellow** | GBC / MBC5 | Full CGB Color | Boots and renders with color palettes |
+| **Pokemon Yellow** | GBC / MBC5 | Full CGB Color | Playable with full color — title screen through Pikachu's Beach |
 
 ## The Idea
 
@@ -31,19 +31,15 @@ Each ROM function becomes a C function (`func_b01_42B7`). Branches become `goto`
 
 ## How Far Does It Get?
 
-**Pretty far.** The full intro sequence plays with graphics, the title screen works, and you can get into the overworld:
+**Pretty far.** Both Red and Yellow are playable with full graphics, sound, and color support:
 
-| Copyright | Game Freak Intro | Title Sequence |
-|:---:|:---:|:---:|
-| ![Copyright](screenshots/01_copyright.png) | ![Intro](screenshots/02_intro_pokemon.png) | ![Title](screenshots/03_title.png) |
+![Pikachu's Beach](pikachusurf.png)
 
-| Nidorino vs Gengar | Battle Intro | Oak's Lab |
-|:---:|:---:|:---:|
-| ![Menu](screenshots/04_mainmenu.png) | ![Nidorino](screenshots/05_nidorino.png) | ![Oak](screenshots/06_oak_intro.png) |
+*Surfing Pikachu mini-game running natively via static recompilation with CGB color palettes.*
 
 **Current progression (Red):** Copyright -> Game Freak -> Nidorino battle -> cycling Pokemon -> title screen -> main menu -> NEW GAME -> Oak's intro -> name entry -> overworld (Pallet Town) -> Oak's Route 1 script (in progress)
 
-**Current progression (Yellow):** Boots into CGB mode, runs init sequence, renders with color palettes. Title screen in progress.
+**Current progression (Yellow):** Full CGB color. Init -> title screen -> gameplay with color palettes, including Pikachu's Beach surfing mini-game.
 
 ## Building
 

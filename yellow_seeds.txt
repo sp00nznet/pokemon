@@ -1,0 +1,83 @@
+# Yellow dispatch seeds - functions that fall back to interpreter
+# Format: bank_decimal:addr_hex
+# These were identified from dispatch fallback logging
+
+# Bank 0x08 = 8, addr 0x5B3F (sound hardware init)
+8:5B3F
+
+# Bank 0x1C = 28, addr 0x61F8 (serial/link check)
+28:61F8
+
+# Bank 0x10 = 16, addr 0x5997 (battle/menu init)
+16:5997
+
+# Bank 0x1C = 28, addr 0x656C (Pokemon stat processing)
+28:656C
+
+# Bank 0x1C = 28, addr 0x64DF (called from 0x656C)
+28:64DF
+
+# Round 2: fallbacks found during 500-frame run
+# Bank 0x1C = 28, addr 0x5EB3 (post-init, called once)
+28:5EB3
+
+# Bank 0x01 = 1, addr 0x4337 (post-init, called once)
+1:4337
+
+# Bank 0x08 = 8, addr 0x5AB7 (sound-related, called once)
+8:5AB7
+
+# Bank 0x03 = 3, addr 0x402D (called 141 times - frequent VBlank handler)
+3:402D
+
+# Round 3: remaining fallback from 500-frame run
+# Bank 0x1C = 28, addr 0x5F99 (post-init display)
+28:5F99
+
+# Round 4: fallbacks from 1000-frame run
+1:43C3
+62:582D
+61:459A
+61:4585
+61:4578
+61:453F
+28:5F84
+8:59F8
+
+# Round 5: fallbacks from 1500-frame run
+62:592F
+28:5F8B
+
+# Round 6: bank 0x3E fallbacks
+62:6007
+62:595F
+62:596A
+62:6062
+62:5A08
+28:60AD
+62:5A1E
+62:5A60
+62:5A6B
+62:6014
+62:5AB1
+62:5AD8
+62:5AF9
+62:5B10
+62:5B30
+62:5B50
+62:5B70
+62:5B90
+62:5BB0
+62:5BD0
+62:5C00
+62:5B04
+62:602B
+62:5BF6
+62:5CAC
+62:603F
+62:5D12
+62:6051
+62:5D22
+62:5D8F
+62:5DBF
+62:5E12
