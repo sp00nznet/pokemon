@@ -81,3 +81,19 @@
 62:5D8F
 62:5DBF
 62:5E12
+
+# Round 7: 5000-frame with auto-input
+1:43D9
+1:43C7
+1:43BF
+1:43BA
+1:43BE
+# Dense bank 01 0x43xx area (jump table targets)
+1:43A0
+1:43A5
+1:43AA
+1:43AF
+1:43B5
+61:5B71
+3:76D6
+3:44F4
