@@ -92,12 +92,9 @@
 1:43BF
 1:43BA
 1:43BE
-# Dense bank 01 0x43xx area (jump table targets)
-1:43A0
-1:43A5
-1:43AA
-1:43AF
-1:43B5
+# Dense bank 01 0x43xx area - REMOVED: created false function boundaries
+# in title screen animation code (similar to bulk bank 0 seed issue)
+# 1:43A0, 1:43A5, 1:43AA, 1:43AF, 1:43B5
 61:5B71
 3:76D6
 3:44F4

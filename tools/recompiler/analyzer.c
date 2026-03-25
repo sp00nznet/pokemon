@@ -906,12 +906,13 @@ static void ensure_successor_blocks(bank_analysis_t *ba)
 /* ------------------------------------------------------------------ */
 
 void analysis_init(analysis_ctx_t *ctx, const uint8_t *rom, size_t rom_size,
-                   int num_banks)
+                   int num_banks, const char *game_name)
 {
     memset(ctx, 0, sizeof(*ctx));
     ctx->rom_data  = rom;
     ctx->rom_size  = rom_size;
     ctx->num_banks = num_banks;
+    ctx->game_name = game_name;
 
     ctx->banks = (bank_analysis_t *)malloc(sizeof(bank_analysis_t) * num_banks);
     if (!ctx->banks) {
@@ -1278,9 +1279,9 @@ void analysis_run(analysis_ctx_t *ctx)
     }
 
     /* Pass 1.8: Manually seed banked functions that the analyzer misses.
-     * These are bank-0 CALL targets in the switchable area where the
-     * LD A,n bank-switch detection works but the target function doesn't
-     * get generated (absorbed by neighboring functions or tracing fails). */
+     * These are Red/Blue-specific addresses — skip for Yellow since
+     * the ROM layout differs and these would create false boundaries. */
+    if (!ctx->game_name || strcmp(ctx->game_name, "yellow") != 0)
     {
         struct { uint8_t bank; uint16_t addr; } manual_seeds[] = {
             { 0x03, 0x4E04 },  /* called from func_b00_2BCF */

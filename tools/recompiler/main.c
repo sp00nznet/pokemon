@@ -240,7 +240,7 @@ int main(int argc, char *argv[]) {
     /* Phase 1: Analyze control flow */
     printf("=== Phase 1: Control Flow Analysis ===\n");
     analysis_ctx_t analysis;
-    analysis_init(&analysis, rom, rom_size, num_banks);
+    analysis_init(&analysis, rom, rom_size, num_banks, game_name);
     if (trace_file) {
         analysis_load_trace(&analysis, trace_file);
     }

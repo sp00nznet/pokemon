@@ -67,6 +67,7 @@ typedef struct {
     const uint8_t *rom_data;
     size_t         rom_size;
     int            num_banks;
+    const char    *game_name;   /* "red", "blue", or "yellow" */
     bank_analysis_t *banks;     /* Array of num_banks analyses */
 
     /* Cross-bank call targets discovered during analysis */
@@ -78,7 +79,7 @@ typedef struct {
 } analysis_ctx_t;
 
 /* Initialize analysis context */
-void analysis_init(analysis_ctx_t *ctx, const uint8_t *rom, size_t rom_size, int num_banks);
+void analysis_init(analysis_ctx_t *ctx, const uint8_t *rom, size_t rom_size, int num_banks, const char *game_name);
 
 /* Load trace file and add entry points as function seeds.
  * Trace format: one "bank:addr" pair per line (hex). */
