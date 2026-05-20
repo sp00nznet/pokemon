@@ -16,6 +16,15 @@ endif()
 # Build the recompiler tool first
 add_subdirectory(tools/recompiler)
 
+# gb-recompiled runtime feature gates.
+# The runtime CMakeLists defaults LA_HAS_MULTIPLAYER ON whenever SDL2 is
+# found, but the multiplayer overlay (ENet world sync, PvP, trade) is
+# Link's Awakening-specific game logic with no meaning for Pokemon. Force
+# it off so the ENet submodule and mp_* sources are never compiled.
+# LA_HAS_IMGUI is left at its default (on) — the Pokemon debug GUI / asset
+# viewer depend on it.
+set(LA_HAS_MULTIPLAYER OFF CACHE BOOL "Multiplayer overlay is LA-specific" FORCE)
+
 # Build gb-recompiled runtime (provides gbrt static library + SDL2 + ImGui)
 add_subdirectory(gbrecomp/runtime)
 
