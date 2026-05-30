@@ -1,182 +1,131 @@
-# Pokemon Static Recompilation
+# Pokémon — Statically Recompiled
 
-> *What if we just... turned the whole ROM into C and ran it natively?*
+> *Generation I Pokémon as native executables. No emulator. No ROM interpretation at runtime. Just SM83 assembly translated, ahead of time, into portable C.*
 
-A static recompiler that translates Pokemon Game Boy ROMs (SM83 CPU) into native C code, then runs them with [gb-recompiled](https://github.com/sp00nznet/gb-recompiled)'s runtime — complete with ImGui debug GUI, asset viewer, interpreter fallback, and CGB color support. No interpreter loop. No JIT. Just 64 banks of generated C functions that think they're running on a Game Boy.
+This repository ports **Generation I Pokémon** — Yellow, Red, Blue — to native code via [**gb-recompiled**](https://github.com/sp00nznet/gb-recompiled): a static recompiler that lifts SM83 (Z80-ish) machine code directly into C. Each game builds into its own native `rom.exe`. No emulator in the loop, only a small fallback interpreter for indirect jumps the static analyser couldn't resolve.
 
-## Supported Games
+Sibling projects on the same toolchain: [`LinksAwakening`](https://github.com/sp00nznet/LinksAwakening), [`pokemon-gold`](https://github.com/sp00nznet/pokemon-gold), [`pokemon-crystal`](https://github.com/sp00nznet/pokemon-crystal), [`oracle-recompiled`](https://github.com/sp00nznet/oracle-recompiled).
 
-| Game | ROM Type | Color | Status |
-|------|----------|-------|--------|
-| **Pokemon Red** | DMG / MBC3 | Monochrome | Intro through overworld |
-| **Pokemon Blue** | DMG / MBC3 | Monochrome | Should work (same engine) |
-| **Pokemon Yellow** | GBC / MBC5 | Full CGB Color | Playable with full color — title screen through Pikachu's Beach |
+---
 
-## The Idea
+## Status
 
-The Game Boy CPU (Sharp SM83) has a finite ROM. Every instruction has a fixed address. So instead of emulating one opcode at a time, we analyze the entire ROM ahead of time, discover every function and basic block, and generate equivalent C code. At runtime, the generated code calls through gb-recompiled's battle-tested runtime that provides the memory bus, PPU, APU, timers, and everything else the game expects.
+| Game | Cart | Color | Status |
+|---|---|---|---|
+| **Pokémon Yellow** | MBC5, GBC | CGB palettes | ✅ Boots; GAME FREAK + Pikachu intro render with correct palettes |
+| **Pokémon Red** | MBC3, DMG | Mono | ⏳ Bring-up |
+| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Bring-up |
 
-Unknown code paths automatically fall back to a real SM83 interpreter — no more silent dispatch failures.
+---
 
-### Recompiler Pipeline
+## Layout
 
 ```
-ROM binary --> Decoder (SM83 instructions)
-           --> Analyzer (functions, basic blocks, control flow graph)
-           --> Codegen (C source per bank + dispatch table)
-           --> gb-recompiled runtime (SDL2 + ImGui + interpreter fallback)
+pokemon/
+├── gbrecomp/   submodule → sp00nznet/gb-recompiled (the recompiler + runtime)
+├── roms/       your legal ROMs (gitignored)
+├── tools/      PyBoy diagnostic scripts + input scripts
+├── yellow/     Yellow build dir (rom_main.c + CMakeLists committed; rom.c/rom_rom.c regenerated)
+├── red/        Red, WIP
+├── blue/       Blue, WIP
+└── screenshots/
 ```
 
-Each ROM function becomes a C function (`func_b01_42B7`). Branches become `goto`. Calls become C calls. Hardware ops go through gbrt. Interrupts are checked cooperatively at basic block boundaries and HALT instructions.
+Each game directory is self-contained, matching the `pokemon-gold` convention: tracked `rom_main.c` + `CMakeLists.txt`, generated `rom.c` / `rom.h` / `rom_rom.c` (gitignored, regenerated each recompile).
 
-## How Far Does It Get?
-
-**Pretty far.** Both Red and Yellow are playable with full graphics, sound, and color support:
-
-![Pikachu's Beach](pikachusurf.png)
-
-*Surfing Pikachu mini-game running natively via static recompilation with CGB color palettes.*
-
-**Current progression (Red):** Copyright -> Game Freak -> Nidorino battle -> cycling Pokemon -> title screen -> main menu -> NEW GAME -> Oak's intro -> name entry -> overworld (Pallet Town) -> Oak's Route 1 script (in progress)
-
-**Current progression (Yellow):** Full CGB color. Init -> title screen -> gameplay with color palettes, including Pikachu's Beach surfing mini-game.
+---
 
 ## Building
 
 ### Prerequisites
-- CMake 3.16+
-- MSVC 2022 (Windows) or GCC/Clang
-- SDL2 (via vcpkg recommended)
-- Python 3.11+ with PyBoy (`pip install pyboy`) for ground truth traces
-- A Pokemon ROM file -- you supply your own
 
-### Steps
+- **Windows 11**: Visual Studio 2022 Build Tools (C++ workload), CMake ≥ 3.20, SDL2 via [vcpkg](https://github.com/microsoft/vcpkg) (`vcpkg install sdl2:x64-windows`).
+- **Python 3.11+** with `pyboy` (`pip install pyboy`) — for the ground-truth trace capture.
+- A legally obtained ROM placed in `roms/`.
+
+### Clone
 
 ```bash
-# Clone with submodule
-git clone --recursive https://github.com/sp00nznet/pokemon.git
+git clone --recurse-submodules https://github.com/sp00nznet/pokemon.git
 cd pokemon
-
-# If imgui submodule is empty:
-git clone https://github.com/ocornut/imgui.git gbrecomp/runtime/third_party/imgui
-git -C gbrecomp/runtime/third_party/imgui checkout 277ae93c41
-
-# Configure
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-
-# Build the recompiler
-cmake --build build --target recompiler --config Release
-
-# Recompile a ROM (generates ~64 C files + dispatch table)
-./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Red Version.gb" -o src/generated
-# or for Yellow:
-./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" -o src/generated
-
-# Reconfigure (picks up generated files)
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-
-# Build the game
-cmake --build build --target pokemon_red --config Release   # or pokemon_yellow
-
-# Play
-./build/Release/pokemon_red.exe
 ```
 
-### Trace-Guided Recompilation
-
-The recompiler supports `--use-trace` to seed function discovery with PyBoy execution traces:
+### Build the gb-recompiled recompiler (once)
 
 ```bash
-# Capture ground truth from PyBoy (dense trace with call targets)
-python tools/pyboy_dense_trace.py "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" \
-    -o pokemon_yellow_dense.trace --frames 9000
-
-# Filter to call/jump targets only
-python -c "..." > pokemon_yellow_filtered.trace
-
-# Recompile with trace seeds
-./build/tools/recompiler/Release/recompiler.exe "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" \
-    -o src/generated --use-trace pokemon_yellow_filtered.trace
+cmake -S gbrecomp -B gbrecomp/build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build gbrecomp/build --target gbrecomp --config Release
 ```
 
-## Debugging Infrastructure
+That produces `gbrecomp/build/bin/Release/gbrecomp.exe`.
 
-### Hardware Trace Comparison
-
-Compare recompiled output against PyBoy frame-by-frame:
+### Bring up a game (Yellow shown — Red/Blue are identical with their own ROM)
 
 ```bash
-# Capture PyBoy ground truth
-python tools/pyboy_hwtrace.py "roms/Pokemon Red Version.gb" -o pyboy_trace.log --frames 1000
+# 1) point the recompiler at a rom-named copy so output files are rom.{c,h,_rom.c}
+cp "roms/Pokemon Yellow Version - Special Pikachu Edition.gbc" yellow/rom.gbc
 
-# Run recompiled game with hwtrace
-./build/Release/pokemon_red.exe --hwtrace recomp_trace.log --stop-at 1000
+# 2) capture a PyBoy ground-truth execution trace
+python gbrecomp/tools/capture_ground_truth.py yellow/rom.gbc \
+    -o yellow/rom.trace -f 18000 --random
 
-# Compare (71-frame offset for boot ROM)
-python tools/compare_traces.py pyboy_trace.log recomp_trace.log --offset 71
+# 3) recompile (writes rom.c, rom.h, rom_main.c, rom_rom.c)
+gbrecomp/build/bin/Release/gbrecomp.exe yellow/rom.gbc \
+    -o yellow --use-trace yellow/rom.trace
+
+# 4) configure + build
+cmake -S yellow -B yellow/build \
+    -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build yellow/build --config Release
+
+# 5) run
+./yellow/build/Release/rom.exe
 ```
 
-### CLI Flags
+Useful flags on `rom.exe` (from gbrecomp's runtime):
 
-| Flag | Description |
-|------|-------------|
-| `--stop-at N` | Auto-exit after N frames |
-| `--auto-input "F:btn:dur"` | Automated button presses |
-| `--hwtrace file` | Per-frame hardware state CRCs |
-| `--trace-entries file` | Log dispatch entry points |
-| `--wram-dump N` | Binary WRAM dump at frame N |
-| `--dump-frames "N,M"` | Screenshot specific frames |
-| `--debug-dispatch` | Log every dispatch call |
-| `--watch 0xD730` | Memory watchpoint |
+| Flag | Effect |
+|---|---|
+| `--dump-frames "100,400,900"` | dump frames at the listed numbers as `screenshot_NNNNN.ppm` |
+| `--limit N` | cap total instructions (handy for headless smoke tests) |
+| `--input FILE` | replay a recorded button script |
+| `--trace`, `--trace-entries FILE` | dump every translated instruction address that executed |
 
-## Architecture
+---
 
-### Runtime: gb-recompiled
-
-The game links against [gb-recompiled](https://github.com/sp00nznet/gb-recompiled)'s `gbrt` library which provides:
-
-- **Full GB/CGB hardware emulation** (PPU, APU, timer, MBC1/3/5, DMA, serial)
-- **SM83 interpreter** for fallback execution of undiscovered code
-- **SDL2 + ImGui frontend** with asset viewer (tiles, sprites, tilemaps, palettes)
-- **Save states and battery RAM persistence**
-- **Hardware trace output** in SameBoy-compatible format
-
-### Pokemon-Specific Bridge
-
-| File | Purpose |
-|------|---------|
-| `src/pokemon_rt.h` | Sync, HALT, interrupt helpers for generated code |
-| `src/pokemon_debug.c/h` | Dispatch trace ring buffer, memory watchpoints |
-| `src/generated/stubs.c` | Game-specific stubs (Bankswitch, Predef, CallFunctionInTable) |
-
-### Recompiler
+## How it works
 
 ```
-tools/recompiler/
-  decoder.c         SM83 instruction decoder (all opcodes + CB prefix)
-  analyzer.c        Function/block discovery, trace loading, dispatch seeds
-  codegen.c         C code generation targeting GBContext API
-  symbols.c         Symbol table (entry points, predef tables, farcall patterns)
-  main.c            CLI with --use-trace support
+ROM (.gb/.gbc)               PyBoy ground truth                gbrecomp
+       │                            │                              │
+       ▼                            ▼                              ▼
+[2 MB SM83 machine code]  +  [proven entry-points trace]  →  [~66 MB native C]
+                                                                    │
+                                                                    ▼
+                                                          cmake / MSVC + SDL2
+                                                                    │
+                                                                    ▼
+                                                  rom.exe (statically recompiled)
+                                                  ├─ translated game code
+                                                  ├─ gbrt runtime (PPU, APU, MBCs, save)
+                                                  └─ SDL2 + Dear ImGui debug overlay
 ```
 
-## Key Technical Details
+The `--use-trace` step is the key: it seeds the recompiler with every `(bank, addr)` PyBoy actually executed, solving the `JP (HL)` / PUSH-ret trampoline patterns Pokémon uses for predef / farcall / jump-table dispatch — control flow the static analyser cannot follow on its own.
 
-- **Register pairs use C unions:** `ctx->hl` for 16-bit, `ctx->h`/`ctx->l` for 8-bit
-- **Flags unpacked for performance:** `ctx->f_z`, `ctx->f_n`, `ctx->f_h`, `ctx->f_c`
-- **Inline ALU:** Addition/subtraction/logic emitted inline (no function call overhead)
-- **Cooperative interrupts:** Checked at basic block boundaries via `pokemon_sync(ctx)`
-- **Interpreter fallback:** Unknown dispatch targets use `gb_interpret(ctx, addr)` instead of crashing
-- **Game-aware stubs:** Bankswitch/Predef/CallFunctionInTable at Red-specific (0x35D6/0x3E6D/0x3D97) and Yellow-specific (0x3E84/0x3EB4/0x3D93) addresses
-- **Auto-detected entry point:** ROM header's JP target (Red: 0x0150, Yellow: 0x01AB)
+See [`gbrecomp/GROUND_TRUTH_WORKFLOW.md`](https://github.com/sp00nznet/gb-recompiled/blob/main/GROUND_TRUTH_WORKFLOW.md) for the detailed flow.
 
-## ROM Files
+---
 
-Place ROM files in `roms/` (gitignored):
-- `Pokemon Red Version.gb`
-- `Pokemon Blue Version.gb`
-- `Pokemon Yellow Version - Special Pikachu Edition.gbc`
+## Notes
+
+- ROMs are **never** committed. Provide your own legal copy under `roms/`.
+- Each game's `rom.c` (≈ 66 MB for Yellow) and `rom_rom.c` (≈ 6.6 MB) are generated and gitignored; only `rom_main.c` and `CMakeLists.txt` are tracked per game.
+- Editing the auto-generated `CMakeLists.txt` is fine — re-running the recompiler overwrites it, so re-apply any local tweaks afterwards (mostly `GBRT_DIR`, `LA_HAS_IMGUI`, `GB_RECOMPILED_DISPATCH`).
+- `tools/pyboy_*.py` are project-specific PyBoy diagnostic scripts kept from the Yellow GAME FREAK palette debugging session.
+
+---
 
 ## License
 
-This project is for educational and research purposes. No ROM data is included -- you must provide your own legally obtained ROM files.
+MIT. The runtime (`gbrecomp/runtime/`) is MIT via the gb-recompiled submodule. ROMs are © Nintendo / Game Freak / Creatures — bring your own.
