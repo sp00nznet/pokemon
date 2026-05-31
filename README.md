@@ -13,8 +13,8 @@ Sibling projects on the same toolchain: [`LinksAwakening`](https://github.com/sp
 | Game | Cart | Color | Status |
 |---|---|---|---|
 | **Pokémon Yellow** | MBC5, GBC | CGB palettes | ✅ Boots; GAME FREAK + Pikachu intro render with correct palettes |
-| **Pokémon Red** | MBC3, DMG | Mono | ⏳ Bring-up |
-| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Bring-up |
+| **Pokémon Red** | MBC3, DMG | Mono | 🚧 Builds, but `rom.exe` stalls at boot — screen stays white through ≥ 5000 frames. Likely a DMG-vs-CGB init divergence in `gb_context_create(NULL)`, or a recompiled function the sparse PyBoy trace missed. WIP. |
+| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Not started (same toolchain expected to apply once Red is unblocked) |
 
 ---
 
