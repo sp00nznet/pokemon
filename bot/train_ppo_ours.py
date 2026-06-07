@@ -26,8 +26,10 @@ sys.path.insert(0, BOT)
 sys.path.insert(0, V2)
 
 GB_PATH = os.path.join(ROOT, "red", "rom.gb")
-INIT_STATE = os.path.join(BOT, "red_start.gbromstate")
-SESS = Path(os.path.join(BOT, "train_out"))
+# Start state is overridable so the extended run can train from the richer
+# "has a starter Pokemon" snapshot instead of the empty-party bedroom one.
+INIT_STATE = os.environ.get("START_STATE") or os.path.join(BOT, "red_start.gbromstate")
+SESS = Path(os.environ.get("TRAIN_OUT") or os.path.join(BOT, "train_out"))
 
 EP_LEN = int(os.environ.get("EP_LEN", "20480"))
 
