@@ -67,7 +67,19 @@ def main():
     ap.add_argument("--gif-scale", type=int, default=3)
     ap.add_argument("--gif-frames", type=int, default=160, help="max frames in GIF")
     ap.add_argument("--gif-fps", type=int, default=14)
+    ap.add_argument("--deterministic", action="store_true",
+                    help="argmax actions; default is stochastic sampling, which "
+                         "is how PPO was trained (deterministic can collapse to a "
+                         "stuck state, e.g. walking into a wall)")
     args = ap.parse_args()
+
+    # Resolve user paths against the launch CWD before we chdir into V2.
+    if args.checkpoint and not os.path.isabs(args.checkpoint):
+        args.checkpoint = os.path.abspath(args.checkpoint)
+    if not os.path.isabs(args.start):
+        args.start = os.path.abspath(args.start)
+    if not os.path.isabs(args.train_dir):
+        args.train_dir = os.path.abspath(args.train_dir)
 
     os.chdir(V2)  # RedGymEnv opens events.json/map_data.json relatively
     from pyboy_shim import PyBoyShim
@@ -114,7 +126,7 @@ def main():
     for step in range(args.steps):
         base.pyboy._frame_sink = []   # capture every intra-step game-frame
         if model is not None:
-            action, _ = model.predict(vobs, deterministic=True)
+            action, _ = model.predict(vobs, deterministic=args.deterministic)
             vobs, rew, done, info = model.env.step(action)
             total_r += float(rew[0]); done = bool(done[0])
         else:
