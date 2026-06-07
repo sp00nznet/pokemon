@@ -61,8 +61,12 @@ def main():
     ap.add_argument("--start", default=os.path.join(BOT, "red_starter.gbromstate"))
     ap.add_argument("--out", default=os.path.join(BOT, "watch_out", "agent.mp4"))
     ap.add_argument("--scale", type=int, default=4)
-    ap.add_argument("--fps", type=int, default=15)
+    ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--live", action="store_true")
+    ap.add_argument("--gif", default=None, help="also write a (clean, decimated) GIF here")
+    ap.add_argument("--gif-scale", type=int, default=3)
+    ap.add_argument("--gif-frames", type=int, default=160, help="max frames in GIF")
+    ap.add_argument("--gif-fps", type=int, default=14)
     args = ap.parse_args()
 
     os.chdir(V2)  # RedGymEnv opens events.json/map_data.json relatively
@@ -104,8 +108,11 @@ def main():
     print(f"writing {out_path} ({args.steps} steps @ {args.fps}fps, "
           f"{args.policy} policy){' + live window' if args.live else ''}")
 
+    gif_frames = []          # raw (no-HUD) frames, decimated at the end
+    quit_early = False
     total_r = 0.0
     for step in range(args.steps):
+        base.pyboy._frame_sink = []   # capture every intra-step game-frame
         if model is not None:
             action, _ = model.predict(vobs, deterministic=True)
             vobs, rew, done, info = model.env.step(action)
@@ -114,30 +121,48 @@ def main():
             a = rng.choice([0, 1, 2, 3, 4], p=[0.23, 0.23, 0.23, 0.23, 0.08])
             obs, rew, done, trunc, info = base.step(int(a))
             total_r += float(rew); done = done or trunc
+        frames = base.pyboy._frame_sink or []
+        base.pyboy._frame_sink = None
 
-        rgb = base.pyboy.screen.ndarray[:, :, :3]
-        big = cv2.resize(rgb, (rgb.shape[1] * args.scale, rgb.shape[0] * args.scale),
-                         interpolation=cv2.INTER_NEAREST).copy()
-        big = hud(big, [
+        lines = [
             f"step {step:4d}  map 0x{base.read_m(0xD35E):02X}  "
             f"party {base.read_m(0xD163)}  rew {total_r:6.1f}",
             f"pos ({base.read_m(0xD362)},{base.read_m(0xD361)})  "
             f"{'TRAINED' if model else 'RANDOM'}",
-        ])
-        writer.append_data(big)
-        if args.live:
-            cv2.imshow("recompiled Pokemon - RL agent", cv2.cvtColor(big, cv2.COLOR_RGB2BGR))
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+        ]
+        for fr in frames:                              # smooth: one video frame per game-frame
+            big = cv2.resize(fr, (fr.shape[1] * args.scale, fr.shape[0] * args.scale),
+                             interpolation=cv2.INTER_NEAREST).copy()
+            writer.append_data(hud(big, lines))
+            if args.live:
+                cv2.imshow("recompiled Pokemon - RL agent",
+                           cv2.cvtColor(big, cv2.COLOR_RGB2BGR))
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    quit_early = True
+                    break
+        if args.gif:
+            gif_frames.extend(frames)
+        if quit_early:
+            break
         if done and model is None:
-            obs, _ = base.reset()   # gym single-env needs manual reset;
-            # the VecEnv (trained path) auto-resets and vobs already holds the
-            # next episode's first observation.
+            obs, _ = base.reset()   # gym single-env needs manual reset; the
+            # VecEnv (trained path) auto-resets and vobs already holds the next obs.
 
     writer.close()
     if args.live:
         cv2.destroyAllWindows()
     print(f"done. final reward {total_r:.1f}. video -> {out_path}")
+
+    if args.gif and gif_frames:
+        gif_path = os.path.join(ROOT, args.gif) if not os.path.isabs(args.gif) else args.gif
+        os.makedirs(os.path.dirname(gif_path), exist_ok=True)
+        keep = max(1, len(gif_frames) // args.gif_frames)
+        sel = gif_frames[::keep][:args.gif_frames]
+        small = [cv2.resize(f, (f.shape[1] * args.gif_scale, f.shape[0] * args.gif_scale),
+                            interpolation=cv2.INTER_NEAREST) for f in sel]
+        imageio.mimsave(gif_path, small, fps=args.gif_fps, loop=0)
+        print(f"gif ({len(small)} frames) -> {gif_path}")
+
     base.pyboy.stop(save=False)
 
 

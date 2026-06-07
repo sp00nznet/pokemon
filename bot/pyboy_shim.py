@@ -118,6 +118,10 @@ class PyBoyShim:
         self._wbuf = ctypes.create_string_buffer(0x2000)
         self._hbuf = ctypes.create_string_buffer(0x100)
         self._cache_valid = False
+        # Optional per-frame capture for video recording. When set to a list,
+        # tick() steps one frame at a time and appends each framebuffer. Left
+        # None during training so tick() stays a single bulk FFI call.
+        self._frame_sink = None
         self.memory = _Memory(self)
         self.screen = _Screen(self)
 
@@ -126,7 +130,14 @@ class PyBoyShim:
         pass
 
     def tick(self, count=1, render=True):
-        self._dll.gbrom_step(self._ctx, int(count))
+        count = int(count)
+        if self._frame_sink is None:
+            self._dll.gbrom_step(self._ctx, count)
+        else:
+            # one frame at a time so every intra-step frame can be recorded
+            for _ in range(count):
+                self._dll.gbrom_step(self._ctx, 1)
+                self._frame_sink.append(self._framebuffer().copy())
         self._cache_valid = False
         return True
 

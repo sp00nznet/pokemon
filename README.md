@@ -16,9 +16,13 @@ Sibling projects on the same toolchain: [`LinksAwakening`](https://github.com/sp
 
 All three boot as **native executables** rendered from their own translated C — no emulator at runtime. Frames are dumped straight from the recompiled engine's framebuffer.
 
-![RL agent playing recompiled Red](screenshots/rl_agent_journey.png)
+![RL agent playing recompiled Red](screenshots/agent.gif)
 
-A reinforcement-learning agent ([PWhiddy's PokemonRedExperiments](https://github.com/PWhiddy/PokemonRedExperiments), unmodified) driving our **recompiled** Red: out of the bedroom, into Pallet Town, the "Wild POKéMON live in tall grass!" event, and into Oak's Lab — every frame computed by the recompiled engine, not an emulator.
+A reinforcement-learning agent ([PWhiddy's PokemonRedExperiments](https://github.com/PWhiddy/PokemonRedExperiments), unmodified) **playing our recompiled Red** — here exploring Oak's Lab and reading the Pokédex. Every frame is computed by the recompiled engine, not an emulator; recorded with [`bot/watch_agent.py`](bot/README.md).
+
+The same agent crosses maps under its own steam — bedroom → Pallet Town → the "Wild POKéMON live in tall grass!" event → Oak's Lab:
+
+![agent journey across maps](screenshots/rl_agent_journey.png)
 
 ---
 
