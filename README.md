@@ -144,8 +144,9 @@ Beyond the SDL `rom.exe`, Red also builds **`rom_headless.dll`** — the same re
 ```bash
 cmake --build red/build --target rom_headless --config Release   # build the DLL
 python bot/diff_harness.py                                        # differential test vs PyBoy
-python bot/run_phase_d.py                                         # watch the RL agent play
+python bot/run_phase_d.py                                         # drive the RL env on our engine
 python bot/train_ppo_ours.py                                      # real PPO training on our engine
+python bot/watch_agent.py --live                                  # watch the trained agent (MP4 + live window)
 ```
 
 Full details — architecture, the boot-splash timing investigation, and how PPO training is wired — are in [`bot/README.md`](bot/README.md).

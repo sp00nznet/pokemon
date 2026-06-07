@@ -135,6 +135,28 @@ from our engine (`bot/phase_d_journey.png`).
 
 ---
 
+## Watch it (`watch_agent.py`)
+
+Render a **trained** agent (auto-loads the latest PPO checkpoint) playing the
+recompiled engine — to an **MP4** by default, plus an optional **live window**.
+Each frame is the engine's framebuffer upscaled with a small HUD (step / map /
+party / position / reward).
+
+```bash
+python bot/watch_agent.py                 # latest checkpoint -> bot/watch_out/agent.mp4
+python bot/watch_agent.py --live          # also show a real-time window (press q to quit)
+python bot/watch_agent.py --policy random # watch an untrained random policy
+python bot/watch_agent.py --checkpoint <path.zip> --start bot/red_start.gbromstate --steps 1200
+```
+
+Since the bot drives the **headless** DLL (no window of its own), the script
+grabs `screen.ndarray` each step and feeds it to an `imageio`/ffmpeg writer and
+(optionally) an OpenCV window — so the same run produces a shareable video and
+a live view. Needs `imageio-ffmpeg` (MP4) and `opencv-python` (window). The MP4
+and `bot/watch_out/` are gitignored.
+
+---
+
 ## Real PPO training (`train_ppo_ours.py`)
 
 Trains the agent with PPO (Stable-Baselines3) using our engine as the backend,
@@ -168,6 +190,7 @@ Env vars: `N_ENVS` (default 8), `TOTAL_STEPS` (default 5e6), `EP_LEN`
 pip install pyboy numpy pillow                       # shim + harness
 pip install gymnasium scikit-image einops mediapy matplotlib   # to run RedGymEnv
 pip install stable_baselines3 torch                  # only for train_ppo_ours.py
+pip install imageio-ffmpeg opencv-python             # only for watch_agent.py (video/live)
 # clone the env (skip LFS model/state blobs):
 GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 \
     https://github.com/PWhiddy/PokemonRedExperiments.git bot/upstream
@@ -185,6 +208,7 @@ scripts `chdir` into `bot/upstream/v2`.
 | `pyboy_shim.py` | PyBoy-compatible ctypes wrapper over `rom_headless.dll` |
 | `diff_harness.py` | differential tester vs stock PyBoy |
 | `run_phase_d.py` | run the real `RedGymEnv` on our engine (random/explore policy) |
+| `watch_agent.py` | render a trained/random agent to MP4 + optional live window |
 | `make_start_state.py` | generate + verify the controllable-overworld start snapshot |
 | `train_ppo_ours.py` | PPO training against our engine |
 | `timing_probe.py`, `phase_align_test.py`, `boot_compare.py`, `diag_*.py`, `calibrate_newgame.py`, `gameplay_lockstep.py` | diagnostics from the timing investigation |

@@ -72,7 +72,9 @@ __pycache__/
 bot/upstream/
 bot/phase_d_out/
 bot/train_out*/
+bot/watch_out/
 *.gbromstate
+*.mp4
 
 # Diagnostic frame dumps / montages from Red bring-up + bot work
 red/*.png
