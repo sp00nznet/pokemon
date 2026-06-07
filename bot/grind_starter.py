@@ -18,8 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pyboy_shim import PyBoyShim  # noqa: E402
 
 BOT = os.path.dirname(os.path.abspath(__file__))
-START = os.path.join(BOT, "red_start.gbromstate")
-OUT = os.path.join(BOT, "red_starter.gbromstate")
+START = os.environ.get("STATE_IN") or os.path.join(BOT, "red_start.gbromstate")
+OUT = os.environ.get("STATE_OUT") or os.path.join(BOT, "red_starter.gbromstate")
 
 D_PARTY, D_MAP, D_PY, D_PX, D_BATTLE = 0xD163, 0xD35E, 0xD361, 0xD362, 0xD057
 ACTS = ["down", "left", "right", "up", "a"]

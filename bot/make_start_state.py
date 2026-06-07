@@ -12,7 +12,8 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pyboy_shim import PyBoyShim  # noqa: E402
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "red_start.gbromstate")
+OUT = os.environ.get("STATE_OUT") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "red_start.gbromstate")
 D_MAP, D_PY, D_PX = 0xD35E, 0xD361, 0xD362
 
 
