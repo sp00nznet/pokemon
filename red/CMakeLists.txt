@@ -57,3 +57,33 @@ add_executable(rom
     rom_rom.c
 )
 target_link_libraries(rom gbrt)
+
+# ----------------------------------------------------------------------------
+# Headless build: rom_headless.dll
+#
+# A SDL/ImGui-free shared library that exposes the gbrom_* C ABI (rom_bridge.c)
+# for driving the recompiled engine from another process (e.g. a Python ctypes
+# shim that mimics PyBoy for differential testing). The core runtime only
+# references the two joypad globals from the platform layer, which
+# platform_headless.c supplies -- so no SDL is linked.
+# ----------------------------------------------------------------------------
+add_library(gbrt_headless STATIC
+    ${GBRT_DIR}/src/gbrt.c
+    ${GBRT_DIR}/src/ppu.c
+    ${GBRT_DIR}/src/audio.c
+    ${GBRT_DIR}/src/interpreter.c
+    ${GBRT_DIR}/src/hwtrace.c
+    platform_headless.c
+)
+target_include_directories(gbrt_headless PUBLIC ${GBRT_DIR}/include)
+# GB_RECOMPILED_DISPATCH: rom.c provides the strong gb_dispatch definitions.
+# No GB_HAS_SDL2 / LA_HAS_IMGUI here -- this build is platform-free.
+target_compile_definitions(gbrt_headless PUBLIC GB_RECOMPILED_DISPATCH)
+set_target_properties(gbrt_headless PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_library(rom_headless SHARED
+    rom_bridge.c
+    rom.c
+    rom_rom.c
+)
+target_link_libraries(rom_headless gbrt_headless)

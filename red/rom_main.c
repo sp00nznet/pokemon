@@ -29,7 +29,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    GBContext* ctx = gb_context_create(NULL);
+    /* Pokemon Red/Blue are DMG carts: boot with A=0x01 and DMG PPU mode. */
+    GBConfig cfg = { 0 };
+    cfg.model = GB_MODEL_DMG;
+    cfg.enable_audio = true;
+    GBContext* ctx = gb_context_create(&cfg);
     if (!ctx) {
         fprintf(stderr, "Failed to create context\n");
         return 1;

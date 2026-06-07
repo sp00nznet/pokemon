@@ -63,3 +63,18 @@ tools/bgb/
 # Keep tracked input scripts
 !tools/pokemon_input.txt
 !tools/pokemon_yellow_input.txt
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+
+# RL bot — generated artifacts (the bot/*.py sources and bot/README.md ARE tracked)
+bot/upstream/
+bot/phase_d_out/
+bot/train_out/
+*.gbromstate
+
+# Diagnostic frame dumps / montages from Red bring-up + bot work
+red/*.png
+yellow/*.png
+bot/*.png

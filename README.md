@@ -13,8 +13,10 @@ Sibling projects on the same toolchain: [`LinksAwakening`](https://github.com/sp
 | Game | Cart | Color | Status |
 |---|---|---|---|
 | **Pokémon Yellow** | MBC5, GBC | CGB palettes | ✅ Boots; GAME FREAK + Pikachu intro render with correct palettes |
-| **Pokémon Red** | MBC3, DMG | Mono | 🚧 Builds, but `rom.exe` stalls at boot — screen stays white through ≥ 5000 frames. Likely a DMG-vs-CGB init divergence in `gb_context_create(NULL)`, or a recompiled function the sparse PyBoy trace missed. WIP. |
-| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Not started (same toolchain expected to apply once Red is unblocked) |
+| **Pokémon Red** | MBC3, DMG | Mono | ✅ Boots to the title screen and into gameplay. Also builds a headless `rom_headless.dll` driven by an RL bot ([`bot/`](bot/README.md)). |
+| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Not started (same `GB_MODEL_DMG` recipe as Red expected to apply) |
+
+> **Red boot fix (DMG init).** Red stayed white because the runtime hard-coded a CGB power-on state. `gb_context_create` ignored its `GBConfig` and forced `A=0x11` (the CGB signature) with the PPU in CGB mode. Red is a **DMG** cart and branches on `A` at `$0100`, so it needs `A=0x01` and DMG PPU/palette behaviour. The fix threads `GBConfig.model` through `gb_context_reset` (DMG → `A=0x01B0`, `ppu->cgb_mode=false`), **defaulting to CGB when `config==NULL`** so Yellow is untouched. `red/rom_main.c` now passes `GBConfig{ .model = GB_MODEL_DMG }`.
 
 ---
 
@@ -26,8 +28,9 @@ pokemon/
 ├── roms/       your legal ROMs (gitignored)
 ├── tools/      PyBoy diagnostic scripts + input scripts
 ├── yellow/     Yellow build dir (rom_main.c + CMakeLists committed; rom.c/rom_rom.c regenerated)
-├── red/        Red, WIP
+├── red/        Red — boots; also builds rom_headless.dll (platform_headless.c + rom_bridge.c)
 ├── blue/       Blue, WIP
+├── bot/        RL bot integration — PyBoy-compatible ctypes shim + differential tester + PPO training
 └── screenshots/
 ```
 
@@ -114,6 +117,24 @@ ROM (.gb/.gbc)               PyBoy ground truth                gbrecomp
 The `--use-trace` step is the key: it seeds the recompiler with every `(bank, addr)` PyBoy actually executed, solving the `JP (HL)` / PUSH-ret trampoline patterns Pokémon uses for predef / farcall / jump-table dispatch — control flow the static analyser cannot follow on its own.
 
 See [`gbrecomp/GROUND_TRUTH_WORKFLOW.md`](https://github.com/sp00nznet/gb-recompiled/blob/main/GROUND_TRUTH_WORKFLOW.md) for the detailed flow.
+
+---
+
+## Headless build + RL bot
+
+Beyond the SDL `rom.exe`, Red also builds **`rom_headless.dll`** — the same recompiled engine with no SDL/ImGui, exposing a tiny C ABI (`gbrom_create/step/read/write/set_buttons/framebuffer/snapshot/restore`). A Python ctypes wrapper ([`bot/pyboy_shim.py`](bot/pyboy_shim.py)) presents that DLL as a **drop-in subset of the PyBoy 2.x API**, which lets two things run against our recompiled engine:
+
+1. **Differential testing vs PyBoy** — feed identical inputs to stock PyBoy and our engine, diff memory + screen. This proved the recompilation is **cycle-faithful** (the only startup difference is PyBoy's own boot splash; after phase-alignment the engines match to a handful of RNG/uninitialized bytes).
+2. **An RL agent plays it** — [PWhiddy's PokemonRedExperiments](https://github.com/PWhiddy/PokemonRedExperiments) `RedGymEnv`, unmodified, with `PyBoy` monkeypatched to our shim. The agent walks out of the bedroom, into Pallet Town, and into Oak's Lab — driven entirely by our engine.
+
+```bash
+cmake --build red/build --target rom_headless --config Release   # build the DLL
+python bot/diff_harness.py                                        # differential test vs PyBoy
+python bot/run_phase_d.py                                         # watch the RL agent play
+python bot/train_ppo_ours.py                                      # real PPO training on our engine
+```
+
+Full details — architecture, the boot-splash timing investigation, and how PPO training is wired — are in [`bot/README.md`](bot/README.md).
 
 ---
 
