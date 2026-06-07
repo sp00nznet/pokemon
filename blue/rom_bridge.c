@@ -63,6 +63,18 @@ GBROM_API void gbrom_write(void* c, uint16_t addr, uint8_t value) {
     if (c) gb_write8((GBContext*)c, addr, value);
 }
 
+/* Bulk-read `len` bytes starting at `addr` into `out`. Lets a caller pull a
+ * whole region (e.g. WRAM/HRAM) in one FFI call instead of hundreds of single
+ * gbrom_read() calls per step -- the dominant cost when an RL env scans event
+ * flags every frame. Addresses wrap at 0x10000. */
+GBROM_API void gbrom_read_range(void* c, uint16_t addr, int len, uint8_t* out) {
+    GBContext* ctx = (GBContext*)c;
+    if (!ctx || !out || len <= 0) return;
+    for (int i = 0; i < len; i++) {
+        out[i] = gb_read8(ctx, (uint16_t)(addr + i));
+    }
+}
+
 /* Set the full joypad state at once. Pass active-low masks; 0xFF = nothing
  * pressed. The caller owns press/release timing. */
 GBROM_API void gbrom_set_buttons(void* c, uint8_t dpad_mask, uint8_t btn_mask) {

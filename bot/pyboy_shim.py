@@ -20,7 +20,8 @@ import os
 
 import numpy as np
 
-_DLL_PATH = os.path.join(
+# DLL path is overridable via the GBROM_DLL env var (e.g. point at blue's).
+_DLL_PATH = os.environ.get("GBROM_DLL") or os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "..", "red", "build", "Release", "rom_headless.dll",
 )
@@ -95,6 +96,13 @@ class PyBoyShim:
         d.gbrom_snapshot_size.restype = ctypes.c_int
         d.gbrom_snapshot.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
         d.gbrom_restore.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        # Optional bulk read; older DLLs lack it -> transparent per-byte fallback.
+        try:
+            d.gbrom_read_range.argtypes = [ctypes.c_void_p, ctypes.c_uint16,
+                                           ctypes.c_int, ctypes.c_char_p]
+            self._has_range = True
+        except AttributeError:
+            self._has_range = False
 
         self._ctx = d.gbrom_create()
         if not self._ctx:
@@ -102,6 +110,14 @@ class PyBoyShim:
         self._dpad = 0xFF
         self._btn = 0xFF
         self._fbuf = ctypes.create_string_buffer(SCREEN_W * SCREEN_H * 3)
+        # WRAM (0xC000-0xDFFF) + HRAM (0xFF00-0xFFFF) snapshot, refreshed lazily
+        # once per tick. Turns an env's hundreds of per-byte reads/step into
+        # array lookups behind a single bulk FFI call.
+        self._wram = b"\x00" * 0x2000
+        self._hram = b"\x00" * 0x100
+        self._wbuf = ctypes.create_string_buffer(0x2000)
+        self._hbuf = ctypes.create_string_buffer(0x100)
+        self._cache_valid = False
         self.memory = _Memory(self)
         self.screen = _Screen(self)
 
@@ -111,6 +127,7 @@ class PyBoyShim:
 
     def tick(self, count=1, render=True):
         self._dll.gbrom_step(self._ctx, int(count))
+        self._cache_valid = False
         return True
 
     def button_press(self, name):
@@ -146,6 +163,7 @@ class PyBoyShim:
             )
         buf = ctypes.create_string_buffer(data, n)
         self._dll.gbrom_restore(self._ctx, buf)
+        self._cache_valid = False
 
     def stop(self, save=False):
         if getattr(self, "_ctx", None):
@@ -165,8 +183,23 @@ class PyBoyShim:
             raise KeyError(f"unknown button {name!r}")
         self._dll.gbrom_set_buttons(self._ctx, self._dpad & 0xFF, self._btn & 0xFF)
 
+    def _refresh_cache(self):
+        self._dll.gbrom_read_range(self._ctx, 0xC000, 0x2000, self._wbuf)
+        self._dll.gbrom_read_range(self._ctx, 0xFF00, 0x100, self._hbuf)
+        self._wram = self._wbuf.raw
+        self._hram = self._hbuf.raw
+        self._cache_valid = True
+
     def _read(self, addr):
-        return self._dll.gbrom_read(self._ctx, addr & 0xFFFF)
+        addr &= 0xFFFF
+        if self._has_range:
+            if not self._cache_valid:
+                self._refresh_cache()
+            if 0xC000 <= addr < 0xE000:
+                return self._wram[addr - 0xC000]
+            if 0xFF00 <= addr <= 0xFFFF:
+                return self._hram[addr - 0xFF00]
+        return self._dll.gbrom_read(self._ctx, addr)
 
     def _framebuffer(self):
         self._dll.gbrom_framebuffer(self._ctx, self._fbuf)
