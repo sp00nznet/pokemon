@@ -71,7 +71,7 @@ __pycache__/
 # RL bot — generated artifacts (the bot/*.py sources and bot/README.md ARE tracked)
 bot/upstream/
 bot/phase_d_out/
-bot/train_out/
+bot/train_out*/
 *.gbromstate
 
 # Diagnostic frame dumps / montages from Red bring-up + bot work

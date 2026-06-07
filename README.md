@@ -8,13 +8,27 @@ Sibling projects on the same toolchain: [`LinksAwakening`](https://github.com/sp
 
 ---
 
+## Gallery
+
+| Pokémon Red | Pokémon Blue | Pokémon Yellow |
+|:--:|:--:|:--:|
+| ![Red title screen](screenshots/red_title.png) | ![Blue title screen](screenshots/blue_title.png) | ![Yellow Pikachu intro](screenshots/yellow_pikachu.png) |
+
+All three boot as **native executables** rendered from their own translated C — no emulator at runtime. Frames are dumped straight from the recompiled engine's framebuffer.
+
+![RL agent playing recompiled Red](screenshots/rl_agent_journey.png)
+
+A reinforcement-learning agent ([PWhiddy's PokemonRedExperiments](https://github.com/PWhiddy/PokemonRedExperiments), unmodified) driving our **recompiled** Red: out of the bedroom, into Pallet Town, the "Wild POKéMON live in tall grass!" event, and into Oak's Lab — every frame computed by the recompiled engine, not an emulator.
+
+---
+
 ## Status
 
 | Game | Cart | Color | Status |
 |---|---|---|---|
 | **Pokémon Yellow** | MBC5, GBC | CGB palettes | ✅ Boots; GAME FREAK + Pikachu intro render with correct palettes |
 | **Pokémon Red** | MBC3, DMG | Mono | ✅ Boots to the title screen and into gameplay. Also builds a headless `rom_headless.dll` driven by an RL bot ([`bot/`](bot/README.md)). |
-| **Pokémon Blue** | MBC3, DMG | Mono | ⏳ Not started (same `GB_MODEL_DMG` recipe as Red expected to apply) |
+| **Pokémon Blue** | MBC3, DMG | Mono | ✅ Boots to the title screen (same `GB_MODEL_DMG` recipe as Red); also builds a headless `rom_headless.dll`. |
 
 > **Red boot fix (DMG init).** Red stayed white because the runtime hard-coded a CGB power-on state. `gb_context_create` ignored its `GBConfig` and forced `A=0x11` (the CGB signature) with the PPU in CGB mode. Red is a **DMG** cart and branches on `A` at `$0100`, so it needs `A=0x01` and DMG PPU/palette behaviour. The fix threads `GBConfig.model` through `gb_context_reset` (DMG → `A=0x01B0`, `ppu->cgb_mode=false`), **defaulting to CGB when `config==NULL`** so Yellow is untouched. `red/rom_main.c` now passes `GBConfig{ .model = GB_MODEL_DMG }`.
 
@@ -29,9 +43,9 @@ pokemon/
 ├── tools/      PyBoy diagnostic scripts + input scripts
 ├── yellow/     Yellow build dir (rom_main.c + CMakeLists committed; rom.c/rom_rom.c regenerated)
 ├── red/        Red — boots; also builds rom_headless.dll (platform_headless.c + rom_bridge.c)
-├── blue/       Blue, WIP
+├── blue/       Blue — boots; same headless build as Red
 ├── bot/        RL bot integration — PyBoy-compatible ctypes shim + differential tester + PPO training
-└── screenshots/
+└── screenshots/ images used in this README
 ```
 
 Each game directory is self-contained, matching the `pokemon-gold` convention: tracked `rom_main.c` + `CMakeLists.txt`, generated `rom.c` / `rom.h` / `rom_rom.c` (gitignored, regenerated each recompile).
@@ -102,7 +116,7 @@ Useful flags on `rom.exe` (from gbrecomp's runtime):
 ROM (.gb/.gbc)               PyBoy ground truth                gbrecomp
        │                            │                              │
        ▼                            ▼                              ▼
-[2 MB SM83 machine code]  +  [proven entry-points trace]  →  [~66 MB native C]
+[1 MB SM83 machine code]  +  [proven entry-points trace]  →  [~62 MB native C]
                                                                     │
                                                                     ▼
                                                           cmake / MSVC + SDL2
@@ -142,7 +156,7 @@ Full details — architecture, the boot-splash timing investigation, and how PPO
 
 - ROMs are **never** committed. Provide your own legal copy under `roms/`.
 - Each game's `rom.c` (≈ 66 MB for Yellow) and `rom_rom.c` (≈ 6.6 MB) are generated and gitignored; only `rom_main.c` and `CMakeLists.txt` are tracked per game.
-- Editing the auto-generated `CMakeLists.txt` is fine — re-running the recompiler overwrites it, so re-apply any local tweaks afterwards (mostly `GBRT_DIR`, `LA_HAS_IMGUI`, `GB_RECOMPILED_DISPATCH`).
+- Re-running the recompiler overwrites the generated `CMakeLists.txt` **and** `rom_main.c`, so re-apply local tweaks afterwards. For Red/Blue specifically: the committed `rom_main.c` passes `GBConfig{ .model = GB_MODEL_DMG }` (a DMG cart needs it to boot) but the recompiler regenerates a CGB-default `rom_main.c` — restore the committed copy, or it will sit on a white screen. Yellow is a real CGB cart and needs no change.
 - `tools/pyboy_*.py` are project-specific PyBoy diagnostic scripts kept from the Yellow GAME FREAK palette debugging session.
 
 ---
