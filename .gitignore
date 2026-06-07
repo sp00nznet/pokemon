@@ -77,4 +77,8 @@ bot/train_out/
 # Diagnostic frame dumps / montages from Red bring-up + bot work
 red/*.png
 yellow/*.png
+blue/*.png
 bot/*.png
+
+# Battery-RAM dumps generated next to game ROMs
+*.ram
